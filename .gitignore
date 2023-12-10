@@ -1,0 +1,8 @@
+cpu
+cpu_syn.v
+cpu_tb
+*.vcd
+*.json
+*.asc
+*.bin
+Makefile.conf
