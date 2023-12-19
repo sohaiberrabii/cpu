@@ -1,12 +1,12 @@
-//`timescale 10ns / 1ns
-
 module test;
     wire [31:0] writedata, dataaddr;
     wire memwrite;
     reg clk, reset;
 
     // instantiate device to be tested
-    top dut(.CLK(clk), .BTN_N(~reset), .memwrite(memwrite), .wdata(writedata), .addr(dataaddr));
+    pipelined dut (
+            .clk(clk), .reset(reset), .memwrite(memwrite), .wdata(writedata), .aluresult(dataaddr)
+    );
 
     // initialize test
     reg [8*32:1] vcdfn;

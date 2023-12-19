@@ -1,5 +1,3 @@
-PROJ = cpu
-
 # icebreaker board
 FREQ = 12
 PIN_DEF = icebreaker.pcf
@@ -7,41 +5,34 @@ FAMILY = u
 DEVICE = up5k
 PACKAGE = sg48
 
-all: $(PROJ).rpt $(PROJ).bin
 
-sim: $(PROJ)_tb.vcd
+all: demo.rpt demo.bin
 
-syn: $(PROJ)_syn.v
+sim: cpu_tb.vcd
 
-%_tb: %_tb.v %.v
-	iverilog -g2001 -Wall -DSIM -o $@ $^
-
-%_tb.vcd: %_tb
+cpu_tb.vcd: cpu_tb
 	vvp -N $< +vcd=$@
 
-%_syn.v: %.json
-	yosys -p 'read_json $^; write_verilog $@; show'
+cpu_tb: cpu_tb.v pipelined.v
+	iverilog -g2001 -Wall -DSIM -o $@ $^
 
-%_pp.v: %.v
-	iverilog -E -o $@ $<
+demo.json: demo.v
+	yosys -p 'synth_ice40 -device $(FAMILY) -top top -json $@' $< pipelined.v
 
-%.json: %_pp.v
-	yosys -p 'synth_ice40 -device $(FAMILY) -top top -json $@' $<
+demo.asc: demo.json
+	nextpnr-ice40 --$(DEVICE) --package $(PACKAGE) --freq $(FREQ) --asc $@ --pcf $(PIN_DEF) --json $<
 
-%.asc: $(PIN_DEF) %.json
-	nextpnr-ice40 --$(DEVICE) --package $(PACKAGE) --freq $(FREQ) --asc $@ --pcf $< --json $*.json
+demo.bin: demo.asc
+	icepack -s $< $@
 
-%.bin: %.asc
-	icepack $< $@
-
-%.rpt: %.asc
+demo.rpt: demo.asc
 	icetime -d up5k -c 12 -mtr $@ $<
 
-prog: $(PROJ).bin
+prog: demo.bin
 	iceprog $<
 
 clean:
-	rm -f $(PROJ)_pp.v $(PROJ).json $(PROJ).asc $(PROJ).bin $(PROJ)_tb $(PROJ)_tb.vcd $(PROJ)_syn.v
+	rm -f demo.bin demo.json demo.rpt demo.asc cpu_tb.vcd cpu_syn.v cpu_syn_tb.vcd
 
-.PHONY: all prog syn sim
-.PRECIOUS: $(PROJ)_tb.vcd
+.PHONY: all prog sim synsim
+.PRECIOUS: cpu_tb.vcd
