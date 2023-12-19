@@ -1,12 +1,7 @@
 # RISCV CPU
 
-Implementation of RV32I single cycle and pipelined processor.
+5-stage pipelined cpu
 
-Based on the microarchitecture from `Digital Design and Computer Architecture: RISC-V Edition`
+`make sim` iverilog simulation
 
-## Requiremenets
-
-- Icarus Verilog
-
-`make sim`
-`make prog` for icebreaker
+`make prog` icebreaker
