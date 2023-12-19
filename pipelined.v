@@ -1,3 +1,5 @@
+`default_nettype none
+
 // TODO: Track & Add missing instructions
 // | ALUreg | ALUimm | Jump  | Branch | LUI | AUIPC | Load  | Store | SYSTEM |
 // |--------|--------|-------|--------|-----|-------|-------|-------|--------|
@@ -5,15 +7,32 @@
 
 module pipelined(
     input clk, reset,
-    output memwrite,
-    output [31:0] aluresult, wdata,
-    output [31:0] pc, pctarget
+    output [31:0] mem_addr,     // data address bus
+    output [31:0] mem_wdata,    // data to be written
+    output mem_write,           // asserted to write to data memory
+    input  [31:0] mem_rdata,    // input lines for both data and instr
+    input  [31:0] instr,        // instruction data
+    output [31:0] pc            // program counter for external instruction memory
 );
+
+    // Memory stage signals
+    reg [4:0] rd_m;
+    reg [31:0] aluresult_m, pcplus4_m, wdata_m;
+    wire [31:0] rdata_m;
+    wire regwrite_m, memwrite_m;
+    wire [1:0] resultsrc_m;
+    reg [3:0] controls_m;
+    assign {regwrite_m, resultsrc_m, memwrite_m} = controls_m;
+
+    assign mem_addr = aluresult_m;
+    assign mem_write = memwrite_m;
+    assign mem_wdata = wdata_m;
+    assign rdata_m = mem_rdata;
     assign pc = pc_f;
-    assign pctarget = pctarget_e;
 
     // Fetch stage signals
     wire [31:0] instr_f, pcplus4_f, pc_f;
+    assign instr_f = instr;
 
     // Decode stage signals
     reg [31:0] instr_d, pcplus4_d, pc_d;
@@ -39,15 +58,6 @@ module pipelined(
         regwrite_e, resultsrc_e, memwrite_e, branch_e, jump_e, aluctl_e, alusrc_e
     } = controls_e;
 
-    // Memory stage signals
-    reg [4:0] rd_m;
-    reg [31:0] aluresult_m, pcplus4_m, wdata_m;
-    wire [31:0] rdata_m;
-    wire regwrite_m, memwrite_m;
-    wire [1:0] resultsrc_m;
-    reg [3:0] controls_m;
-    assign {regwrite_m, resultsrc_m, memwrite_m} = controls_m;
-
     // Writeback stage signals
     reg [4:0] rd_w;
     reg [31:0] aluresult_w, pcplus4_w, rdata_w;
@@ -63,10 +73,9 @@ module pipelined(
 
     assign pcsrc_e = zero_e & branch_e | jump_e;
     fetch fetch (
-        .clk(clk), .reset(reset), .pcsrc_e(pcsrc_e),
+        .clk(clk), .ce(~stallf), .reset(reset), .pcsrc_e(pcsrc_e),
         .pctarget_e(pctarget_e),
-        .instr(instr_f), .pcplus4(pcplus4_f), .pc(pc_f),
-        .ce(~stallf)
+        .pcplus4(pcplus4_f), .pc(pc_f)
     );
 
     decode decode (
@@ -97,12 +106,6 @@ module pipelined(
         .src1(src1), .src2(src2),
         .pc_e(pc_e), .immext_e(immext_e), .alusrc_e(alusrc_e), .aluctl_e(aluctl_e),
         .zero(zero_e), .aluresult(aluresult_e), .pctarget(pctarget_e)
-    );
-
-    memory memory (
-        .clk(clk), .memwrite_m(memwrite_m),
-        .aluresult_m(aluresult_m), .wdata_m(wdata_m),
-        .rdata(rdata_m)
     );
 
     writeback writeback (
@@ -157,12 +160,6 @@ module pipelined(
             };
         end
     end
-
-    // TODO: just make testbench access these values from the instance name: dut.core.*
-    // simulation expect addr and data to be written to memory
-    assign memwrite = memwrite_m;
-    assign aluresult = aluresult_m;
-    assign wdata = wdata_m;
 endmodule
 
 module hazard (
@@ -203,7 +200,6 @@ module fetch(
     input clk, ce, reset,
     input pcsrc_e,
     input [31:0] pctarget_e,
-    output [31:0] instr,
     output [31:0] pcplus4,
     output reg [31:0] pc
 );
@@ -216,8 +212,6 @@ module fetch(
             // 'if' not equivalent to ternary op with 'x valued signals (cf. IEEE-1364-2005).
             if (pcsrc_e) pc <= pctarget_e; else pc <= pcplus4;
     end
-
-    instruction_memory imem (.addr(pc), .instr(instr));
 endmodule
 
 module decode (
@@ -251,17 +245,6 @@ module execute (
     alu alu (
         .a(src1), .b(alusrc_e ? immext_e : src2),
         .ctl(aluctl_e), .res(aluresult), .zero(zero)
-    );
-endmodule
-
-module memory (
-    input clk,
-    input memwrite_m,
-    input [31:0] aluresult_m, wdata_m,
-    output [31:0] rdata
-);
-    data_memory dmem (
-        .clk(clk), .we(memwrite_m), .addr(aluresult_m), .wdata(wdata_m), .rdata(rdata)
     );
 endmodule
 
@@ -356,102 +339,9 @@ module register_file (
     output [31:0] rd1, rd2
 );
     reg [31:0] rf[31:0];
-`ifdef SINGLE
-    always @(posedge clk)
-`else
     always @(negedge clk)
-`endif
         if (we3) rf[addr3] <= wd3;
 
     assign rd1 = (addr1 != 0) ? rf[addr1] : 0;
     assign rd2 = (addr2 != 0) ? rf[addr2] : 0;
-endmodule
-
-module instruction_memory (input [31:0] addr, output [31:0] instr);
-    reg [31:0] mem[0:255];
-    initial $readmemh("riscvtest.txt", mem);
-    assign instr = mem[addr[31:2]];
-endmodule
-
-module data_memory (
-    input clk, we,
-    input [31:0] addr, wdata,
-    output [31:0] rdata
-);
-    reg [31:0] mem [255:0];
-    always @(posedge clk)
-        if (we)
-            mem[addr[31:2]] <= wdata;
-    assign rdata = mem[addr[31:2]];
-endmodule
-
-// Seven segment controller
-// Switches quickly between the two parts of the display
-// to create the illusion of both halfs being illuminated
-// at the same time.
-module seven_seg_ctrl (
-	input CLK,
-	input [7:0] din,
-	output reg [7:0] dout
-);
-	wire [6:0] lsb_digit;
-	wire [6:0] msb_digit;
-
-	seven_seg_hex msb_nibble (
-		.din(din[7:4]),
-		.dout(msb_digit)
-	);
-
-	seven_seg_hex lsb_nibble (
-		.din(din[3:0]),
-		.dout(lsb_digit)
-	);
-
-	reg [9:0] clkdiv = 0;
-	reg clkdiv_pulse = 0;
-	reg msb_not_lsb = 0;
-
-	always @(posedge CLK) begin
-		clkdiv <= clkdiv + 1;
-		clkdiv_pulse <= &clkdiv;
-		msb_not_lsb <= msb_not_lsb ^ clkdiv_pulse;
-
-		if (clkdiv_pulse) begin
-			if (msb_not_lsb) begin
-				dout[6:0] <= ~msb_digit;
-				dout[7] <= 0;
-			end else begin
-				dout[6:0] <= ~lsb_digit;
-				dout[7] <= 1;
-			end
-		end
-	end
-endmodule
-
-
-// Convert 4bit numbers to 7 segments
-module seven_seg_hex (
-	input [3:0] din,
-	output reg [6:0] dout
-);
-	always @*
-		case (din)
-			4'h0: dout = 7'b 0111111;
-			4'h1: dout = 7'b 0000110;
-			4'h2: dout = 7'b 1011011;
-			4'h3: dout = 7'b 1001111;
-			4'h4: dout = 7'b 1100110;
-			4'h5: dout = 7'b 1101101;
-			4'h6: dout = 7'b 1111101;
-			4'h7: dout = 7'b 0000111;
-			4'h8: dout = 7'b 1111111;
-			4'h9: dout = 7'b 1101111;
-			4'hA: dout = 7'b 1110111;
-			4'hB: dout = 7'b 1111100;
-			4'hC: dout = 7'b 0111001;
-			4'hD: dout = 7'b 1011110;
-			4'hE: dout = 7'b 1111001;
-			4'hF: dout = 7'b 1110001;
-			default: dout = 7'b 1000000;
-		endcase
 endmodule

@@ -3,9 +3,25 @@ module test;
     wire memwrite;
     reg clk, reset;
 
-    // instantiate device to be tested
+    // instruction memory
+    wire [31:0] pc;
+    reg [31:0] imem[0:255];
+    initial $readmemh("riscvtest.txt", imem);
+    wire [31:0] instr = imem[pc[31:2]];
+
+    // data memory
+    wire [31:0] mem_rdata;
+    reg [31:0] dmem [255:0];
+    always @(posedge clk)
+        if (memwrite)
+            dmem[dataaddr[31:2]] <= writedata;
+    assign mem_rdata = dmem[dataaddr[31:2]];
+
     pipelined dut (
-            .clk(clk), .reset(reset), .memwrite(memwrite), .wdata(writedata), .aluresult(dataaddr)
+        .clk(clk), .reset(reset),
+        .pc(pc), .instr(instr),
+        .mem_write(memwrite), .mem_addr(dataaddr),
+        .mem_rdata(mem_rdata), .mem_wdata(writedata)
     );
 
     // initialize test
