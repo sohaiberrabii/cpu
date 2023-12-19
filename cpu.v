@@ -1,29 +1,72 @@
+`default_nettype none
+
 module top (
-    input clk, rst,
+    input CLK, BTN_N, BTN1, BTN2, BTN3,
+	output LED1, LED2, LED3, LED4, LED5,
+	output P1A1, P1A2, P1A3, P1A4, P1A7, P1A8, P1A9, P1A10,
+	output P1B1, P1B2, P1B3, P1B4, P1B7, P1B8, P1B9, P1B10,
+`ifdef SIM
     output memwrite,
     output [31:0] wdata, addr
-);
-`ifdef SINGLE
-    wire [31:0] pc, instr, rdata;
-    singlecycle core (
-        .clk(clk), .reset(rst),
-        .instr(instr), .rdata(rdata),
-        .memwrite(memwrite), .pc(pc), .aluresult(addr), .wdata(wdata)
-    );
-
-    instruction_memory imem (.addr(pc), .instr(instr));
-    data_memory dmem (.clk(clk), .we(memwrite), .addr(addr), .wdata(wdata), .rdata(rdata));
-`else
-// TODO: separate instruction and data memory from core
-    pipelined core (.clk(clk), .reset(rst), .memwrite(memwrite), .aluresult(addr), .wdata(wdata));
 `endif
+);
+    wire [31:0] pc, pctarget;
+
+    // TODO: separate instruction and data memory from core
+`ifdef SIM
+    pipelined core (.clk(CLK), .reset(~BTN_N), .memwrite(memwrite), .wdata(wdata), .aluresult(addr));
+`else
+    // Useful when 7 segment display is tracking the pc, replace CLK below with clkdiv_pulse
+	// Clock divider and pulse registers
+
+	// reg [23:0] clkdiv = 0;
+	// reg clkdiv_pulse = 0;
+    // always @(posedge CLK) begin
+	// 	// Clock divider pulse generator
+        // // 12MHz
+	// 	if (clkdiv == 12000000) begin
+	// 		clkdiv <= 0;
+	// 		clkdiv_pulse <= 1;
+	// 	end else begin
+	// 		clkdiv <= clkdiv + 1;
+	// 		clkdiv_pulse <= 0;
+	// 	end
+
+    // end
+
+    pipelined core (.clk(CLK), .reset(~BTN_N), .pc(pc), .pctarget(pctarget));
+`endif
+
+	assign LED1 = ~BTN_N;
+
+    wire [7:0] sseg1, sseg2;
+
+	// Assign 7 segment control line bus to Pmod pins
+	assign { P1A10, P1A9, P1A8, P1A7, P1A4, P1A3, P1A2, P1A1 } = sseg1;
+	assign { P1B10, P1B9, P1B8, P1B7, P1B4, P1B3, P1B2, P1B1 } = sseg2;
+
+	// 7 segment display control
+	seven_seg_ctrl sseg_ctrl1 (
+		.CLK(CLK),
+		.din(pc[7:0]),
+		.dout(sseg1)
+	);
+	seven_seg_ctrl sseg_ctrl2 (
+		.CLK(CLK),
+		.din(pctarget[7:0]),
+		.dout(sseg2)
+	);
 endmodule
 
 module pipelined(
     input clk, reset,
     output memwrite,
-    output [31:0] aluresult, wdata
+    output [31:0] aluresult, wdata,
+    output [31:0] pc, pctarget
 );
+    assign pc = pc_f;
+    assign pctarget = pctarget_e;
+
     // Fetch stage signals
     wire [31:0] instr_f, pcplus4_f, pc_f;
 
@@ -133,7 +176,7 @@ module pipelined(
     hazard hzd (
         .regwrite_m(regwrite_m), .regwrite_w(regwrite_w),
         .rs1_e(rs1_e), .rs2_e(rs2_e), .rd_m(rd_m), .rd_w(rd_w),
-        .rs1_d(instr_d[19:15]), .rs2_d(instr_d[24:20]), .rd_e(rd_e), 
+        .rs1_d(instr_d[19:15]), .rs2_d(instr_d[24:20]), .rd_e(rd_e),
         .forward1(forward1), .forward2(forward2),
         .pcsrc_e(pcsrc_e), .flushd(flushd), .flushe(flushe),
         .stallf(stallf), .stalld(stalld), .resultsrc_e0(resultsrc_e[0])
@@ -220,12 +263,14 @@ module fetch(
     output reg [31:0] pc
 );
     assign pcplus4 = pc + 4;
-    always @(posedge clk, posedge reset)
+    always @(posedge clk) begin
         if (reset)
             pc <= 0;
-        else if(ce)
+        else if (ce)
+        // else if(ce & clkdiv_pulse)
             // 'if' not equivalent to ternary op with 'x valued signals (cf. IEEE-1364-2005).
             if (pcsrc_e) pc <= pctarget_e; else pc <= pcplus4;
+    end
 
     instruction_memory imem (.addr(pc), .instr(instr));
 endmodule
@@ -288,33 +333,6 @@ module writeback (
     endcase
 endmodule
 
-module singlecycle (
-    input clk, reset,
-    input [31:0] instr, rdata,
-    output memwrite,
-    output [31:0] pc, aluresult, wdata
-);
-    wire branch, jump, zero, regwrite, alusrc;
-    wire [1:0] resultsrc, immsrc;
-    wire [2:0] aluctl;
-    wire pcsrc = branch & zero | jump;
-
-    controller ctl (
-        .opcode(instr[6:0]), .funct3(instr[14:12]), .funct75(instr[30]),
-        .alusrc(alusrc), .immsrc(immsrc), .resultsrc(resultsrc),
-        .branch(branch), .jump(jump), .memwrite(memwrite), .regwrite(regwrite),
-        .aluctl(aluctl)
-    );
-
-    datapath dp (
-        .clk(clk), .reset(reset),
-        .instr(instr), .rdata(rdata),
-        .pcsrc(pcsrc), .alusrc(alusrc), .resultsrc(resultsrc), .regwrite(regwrite),
-        .immsrc(immsrc), .aluctl(aluctl),
-        .pc(pc), .alures(aluresult), .wdata(wdata), .zero(zero)
-    );
-endmodule
-
 module controller (
     input [6:0] opcode, input [2:0] funct3, input funct75, // funct7[5]
     output branch, jump, alusrc, regwrite, memwrite,
@@ -346,46 +364,6 @@ module controller (
     end
 endmodule
 
-module datapath (
-    input clk, reset,
-    input [31:0] instr, rdata,
-    input pcsrc, alusrc, regwrite,
-    input [1:0] resultsrc, immsrc,
-    input [2:0] aluctl,
-    output zero,
-    output [31:0] alures, wdata,
-    output reg [31:0] pc
-);
-    wire [31:0] rs1d, rs2d, immext;
-    reg [31:0] result;
-    wire [31:0] pcplus4 = pc + 4;
-    wire [31:0] pcplusimm = pc + immext;
-
-    always @(posedge clk, posedge reset)
-        if (reset)
-            pc <= 0;
-        else
-            pc <= pcsrc ? pcplusimm : pcplus4;
-
-    always @(*) case(resultsrc)
-        2'b00: result = alures;
-        2'b01: result = rdata;
-        2'b10: result = pcplus4;
-        default: result = 31'bx;
-    endcase
-
-    register_file reg_file (
-        .clk(clk), .we3(regwrite),
-        .addr1(instr[19:15]), .addr2(instr[24:20]), .addr3(instr[11:7]),
-        .wd3(result),
-        .rd1(rs1d), .rd2(wdata)
-    );
-
-    extend ext (.instr(instr[31:7]), .immsrc(immsrc), .immext(immext));
-
-    alu alu (.a(rs1d), .b(alusrc ? immext : wdata), .ctl(aluctl), .res(alures), .zero(zero));
-endmodule
-
 module extend (input [31:7] instr, input [1:0] immsrc, output reg [31:0] immext);
     always @(*)
         case (immsrc)
@@ -398,12 +376,6 @@ module extend (input [31:7] instr, input [1:0] immsrc, output reg [31:0] immext)
         endcase
 endmodule
 
-// TODO: experiment how different alu code is synthesized by yosys for eg:
-// res = a + b;
-// res = a - b;
-// res = a & b;
-// res = a | b;
-// res = a < b;
 module alu (input [31:0] a, b, input [2:0] ctl, output reg [31:0] res, output zero);
     wire [31:0] condnotb = ctl[0] ? ~b : b;
     wire [31:0] sum = a + condnotb + ctl[0]; // 2s comp
@@ -465,4 +437,75 @@ module data_memory (
         if (we)
             mem[addr[31:2]] <= wdata;
     assign rdata = mem[addr[31:2]];
+endmodule
+
+// Seven segment controller
+// Switches quickly between the two parts of the display
+// to create the illusion of both halfs being illuminated
+// at the same time.
+module seven_seg_ctrl (
+	input CLK,
+	input [7:0] din,
+	output reg [7:0] dout
+);
+	wire [6:0] lsb_digit;
+	wire [6:0] msb_digit;
+
+	seven_seg_hex msb_nibble (
+		.din(din[7:4]),
+		.dout(msb_digit)
+	);
+
+	seven_seg_hex lsb_nibble (
+		.din(din[3:0]),
+		.dout(lsb_digit)
+	);
+
+	reg [9:0] clkdiv = 0;
+	reg clkdiv_pulse = 0;
+	reg msb_not_lsb = 0;
+
+	always @(posedge CLK) begin
+		clkdiv <= clkdiv + 1;
+		clkdiv_pulse <= &clkdiv;
+		msb_not_lsb <= msb_not_lsb ^ clkdiv_pulse;
+
+		if (clkdiv_pulse) begin
+			if (msb_not_lsb) begin
+				dout[6:0] <= ~msb_digit;
+				dout[7] <= 0;
+			end else begin
+				dout[6:0] <= ~lsb_digit;
+				dout[7] <= 1;
+			end
+		end
+	end
+endmodule
+
+
+// Convert 4bit numbers to 7 segments
+module seven_seg_hex (
+	input [3:0] din,
+	output reg [6:0] dout
+);
+	always @*
+		case (din)
+			4'h0: dout = 7'b 0111111;
+			4'h1: dout = 7'b 0000110;
+			4'h2: dout = 7'b 1011011;
+			4'h3: dout = 7'b 1001111;
+			4'h4: dout = 7'b 1100110;
+			4'h5: dout = 7'b 1101101;
+			4'h6: dout = 7'b 1111101;
+			4'h7: dout = 7'b 0000111;
+			4'h8: dout = 7'b 1111111;
+			4'h9: dout = 7'b 1101111;
+			4'hA: dout = 7'b 1110111;
+			4'hB: dout = 7'b 1111100;
+			4'hC: dout = 7'b 0111001;
+			4'hD: dout = 7'b 1011110;
+			4'hE: dout = 7'b 1111001;
+			4'hF: dout = 7'b 1110001;
+			default: dout = 7'b 1000000;
+		endcase
 endmodule

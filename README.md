@@ -1,4 +1,4 @@
-# RISCV CPU 
+# RISCV CPU
 
 Implementation of RV32I single cycle and pipelined processor.
 
@@ -8,6 +8,5 @@ Based on the microarchitecture from `Digital Design and Computer Architecture: R
 
 - Icarus Verilog
 
-single cycle: `make sim-single`
-
-5-stage pipelne: `make sim-pipelined`
+`make sim`
+`make prog` for icebreaker

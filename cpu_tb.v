@@ -6,7 +6,7 @@ module test;
     reg clk, reset;
 
     // instantiate device to be tested
-    top dut(.clk(clk), .rst(reset), .memwrite(memwrite), .wdata(writedata), .addr(dataaddr));
+    top dut(.CLK(clk), .BTN_N(~reset), .memwrite(memwrite), .wdata(writedata), .addr(dataaddr));
 
     // initialize test
     reg [8*32:1] vcdfn;
