@@ -1,24 +1,10 @@
-module top (
-    input CLK, BTN_N,
-    output memwrite,
-    output [31:0] wdata, addr
-);
-    wire [31:0] pc, instr, rdata;
-    singlecycle core (
-        .clk(CLK), .reset(~BTN_N),
-        .instr(instr), .rdata(rdata),
-        .memwrite(memwrite), .pc(pc), .aluresult(addr), .wdata(wdata)
-    );
-
-    instruction_memory imem (.addr(pc), .instr(instr));
-    data_memory dmem (.clk(clk), .we(memwrite), .addr(addr), .wdata(wdata), .rdata(rdata));
-endmodule
-
-module singlecycle (
+module single (
     input clk, reset,
-    input [31:0] instr, rdata,
-    output memwrite,
-    output [31:0] pc, aluresult, wdata
+    output mem_write,
+    output [31:0] mem_addr,
+    output [31:0] mem_wdata,
+    input [31:0] instr, mem_rdata,
+    output [31:0] pc
 );
     wire branch, jump, zero, regwrite, alusrc;
     wire [1:0] resultsrc, immsrc;
@@ -34,10 +20,10 @@ module singlecycle (
 
     datapath dp (
         .clk(clk), .reset(reset),
-        .instr(instr), .rdata(rdata),
+        .instr(instr), .rdata(mem_rdata),
         .pcsrc(pcsrc), .alusrc(alusrc), .resultsrc(resultsrc), .regwrite(regwrite),
         .immsrc(immsrc), .aluctl(aluctl),
-        .pc(pc), .alures(aluresult), .wdata(wdata), .zero(zero)
+        .pc(pc), .alures(mem_addr), .wdata(mem_wdata), .zero(zero)
     );
 endmodule
 
