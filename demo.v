@@ -6,63 +6,59 @@ module top (
 	output P1A1, P1A2, P1A3, P1A4, P1A7, P1A8, P1A9, P1A10,
 	output P1B1, P1B2, P1B3, P1B4, P1B7, P1B8, P1B9, P1B10,
 );
-    // Useful when 7 segment display is tracking the pc, replace CLK below with clkdiv_pulse
-	// Clock divider and pulse registers
-	reg [23:0] clkdiv = 0;
-	reg clkdiv_pulse = 0;
-    always @(posedge CLK) begin
-		// Clock divider pulse generator
-        // 12MHz
-		if (clkdiv == 12000000) begin
-			clkdiv <= 0;
-			clkdiv_pulse <= 1;
-		end else begin
-			clkdiv <= clkdiv + 1;
-			clkdiv_pulse <= 0;
-		end
-    end
-
     // instruction memory
     wire [31:0] pc;
     reg [31:0] imem[0:255];
     initial $readmemh("riscvtest.txt", imem);
     wire [31:0] instr = imem[pc[31:2]];
 
-    // data memory
+    // spram as data memory
     wire mem_write;
-    wire [31:0] mem_addr, mem_wdata, mem_rdata;
-    reg [31:0] dmem [255:0];
-    always @(posedge clkdiv_pulse)
-        if (mem_write)
-            dmem[mem_addr[31:2]] <= mem_wdata;
-    assign mem_rdata = dmem[mem_addr[31:2]];
+    wire [31:0] mem_addr, mem_wdata, ram_rdata;
+    spram128kB memory (
+		.clk(CLK),
+		.wen(mem_addr < 4 * 32768 ? {4{mem_write}} : 4'b0), // WORDS: 32k = 128kB / 4
+		.addr(mem_addr[16:2]),
+		.wdata(mem_wdata),
+		.rdata(ram_rdata)
+	);
+
+    // memory mapped io regs
+    wire [4:0] ioregs;
+    wire isIO = mem_addr[17];
+    always @(posedge CLK)
+        if (~BTN_N)
+            ioregs <= 0;
+        else if (mem_write)
+            ioregs <= mem_wdata[4:0];
+
+    assign {LED5, LED4, LED3, LED2, LED1} = ioregs;
+    wire [31:0] mem_rdata = isIO ? ioregs : ram_rdata;
 
     pipelined core (
-        .clk(clkdiv_pulse), .reset(~BTN_N),
+        .clk(CLK), .reset(~BTN_N),
         .pc(pc), .instr(instr),
         .mem_write(mem_write), .mem_addr(mem_addr),
         .mem_rdata(mem_rdata), .mem_wdata(mem_wdata)
     );
+	// assign { P1A10, P1A9, P1A8, P1A7, P1A4, P1A3, P1A2, P1A1 } = sseg1;
+	// assign { P1B10, P1B9, P1B8, P1B7, P1B4, P1B3, P1B2, P1B1 } = sseg2;
 
-	assign LED1 = ~BTN_N;
-
-    wire [7:0] sseg1, sseg2;
+    // wire [7:0] sseg1, sseg2;
 
 	// Assign 7 segment control line bus to Pmod pins
-	assign { P1A10, P1A9, P1A8, P1A7, P1A4, P1A3, P1A2, P1A1 } = sseg1;
-	assign { P1B10, P1B9, P1B8, P1B7, P1B4, P1B3, P1B2, P1B1 } = sseg2;
 
 	// 7 segment display control
-	seven_seg_ctrl sseg_ctrl1 (
-		.CLK(CLK),
-		.din(pc[7:0]),
-		.dout(sseg1)
-	);
-	seven_seg_ctrl sseg_ctrl2 (
-		.CLK(CLK),
-		.din(pc[15:8]),
-		.dout(sseg2)
-	);
+	// seven_seg_ctrl sseg_ctrl1 (
+	// 	.CLK(CLK),
+	// 	.din(ioregs[7:0]),
+        // .dout(sseg1)
+	// );
+	// seven_seg_ctrl sseg_ctrl2 (
+	// 	.CLK(CLK),
+	// 	.din(pc[15:8]),
+	// 	.dout(sseg2)
+	// );
 endmodule
 
 // Seven segment controller
@@ -107,7 +103,6 @@ module seven_seg_ctrl (
 		end
 	end
 endmodule
-
 
 // Convert 4bit numbers to 7 segments
 module seven_seg_hex (
