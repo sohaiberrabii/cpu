@@ -6,3 +6,4 @@ cpu_tb
 *.asc
 *.bin
 Makefile.conf
+cpu_tb.vvp

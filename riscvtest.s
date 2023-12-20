@@ -28,4 +28,6 @@ around: slt  x4, x7, x2         # x4 = (3 < 5)  = 1       28        0023A233
         addi x2, x0, 1          # shouldn't happen        44        00100113
 end:    add  x2, x2, x9         # x2 = (7 + 18)  = 25     48        00910133
         sw   x2, 0x20(x3)       # mem[100] = 25           4C        0221A023
-done:   beq  x2, x2, done       # infinite loop           50        00210063
+        lui  x3, 0x20           # x3 = 0x20000            50        000201b7
+        sw   x4, 0(x3)          # mem[0x20000] = 1        54        0041a023
+done:   beq  x2, x2, done       # infinite loop           58        00210063

@@ -14,20 +14,20 @@ module pipelined(
     input  [31:0] instr,        // instruction data
     output [31:0] pc            // program counter for external instruction memory
 );
-
     // Memory stage signals
     reg [4:0] rd_m;
-    reg [31:0] aluresult_m, pcplus4_m, wdata_m;
-    wire [31:0] rdata_m;
+    reg [31:0] aluresult_m, pcplus4_m, wdata_m, uimm_m;
     wire regwrite_m, memwrite_m;
     wire [1:0] resultsrc_m;
     reg [3:0] controls_m;
     assign {regwrite_m, resultsrc_m, memwrite_m} = controls_m;
 
+    // with synchronous data memory there is no more memory stage rdata
+    wire [31:0] rdata_w = mem_rdata;
+
     assign mem_addr = aluresult_m;
     assign mem_write = memwrite_m;
     assign mem_wdata = wdata_m;
-    assign rdata_m = mem_rdata;
     assign pc = pc_f;
 
     // Fetch stage signals
@@ -36,7 +36,7 @@ module pipelined(
 
     // Decode stage signals
     reg [31:0] instr_d, pcplus4_d, pc_d;
-    wire [31:0] rs1d_d, rs2d_d, immext_d;
+    wire [31:0] rs1d_d, rs2d_d, immext_d, uimm_d;
     wire [2:0] aluctl_d;
     wire [1:0] immsrc_d, resultsrc_d;
     wire alusrc_d, regwrite_d, memwrite_d, branch_d, jump_d;
@@ -48,7 +48,7 @@ module pipelined(
     // Execute stage signals
     reg [31:0] rs1d_e, rs2d_e;
     reg [4:0] rs1_e, rs2_e, rd_e;
-    reg [31:0] pcplus4_e, pc_e, immext_e;
+    reg [31:0] pcplus4_e, pc_e, immext_e, uimm_e;
     wire [31:0] aluresult_e, pctarget_e;
     wire [2:0] aluctl_e;
     wire [1:0] resultsrc_e;
@@ -60,7 +60,7 @@ module pipelined(
 
     // Writeback stage signals
     reg [4:0] rd_w;
-    reg [31:0] aluresult_w, pcplus4_w, rdata_w;
+    reg [31:0] aluresult_w, pcplus4_w, uimm_w;
     wire [31:0] result_w;
     wire regwrite_w;
     wire [1:0] resultsrc_w;
@@ -69,7 +69,7 @@ module pipelined(
 
     // Hazard handling signals
     wire [1:0] forward1, forward2;
-    wire flushd, flushe, stallf, stalld;
+    wire flushd, flushe, stallf, stalld, forward_d;
 
     assign pcsrc_e = zero_e & branch_e | jump_e;
     fetch fetch (
@@ -82,7 +82,7 @@ module pipelined(
         .clk(clk), .instr_d(instr_d),
         .regwrite_w(regwrite_w), .result_w(result_w),
         .rd_w(rd_w), .immsrc_d(immsrc_d),
-        .rs1d(rs1d_d), .rs2d(rs2d_d), .immext(immext_d)
+        .rs1d(rs1d_d), .rs2d(rs2d_d), .immext(immext_d), .uimm(uimm_d)
     );
 
     // forward logic
@@ -92,13 +92,13 @@ module pipelined(
            2'b00: src1 = rs1d_e;
            2'b01: src1 = result_w;
            2'b10: src1 = aluresult_m;
-           default: src1 = 32'bx;
+           2'b11: src1 = uimm_m;
         endcase
         case(forward2)
            2'b00: src2 = rs2d_e;
            2'b01: src2 = result_w;
            2'b10: src2 = aluresult_m;
-           default: src2 = 32'bx;
+           2'b11: src2 = uimm_m;
         endcase
     end
 
@@ -111,7 +111,7 @@ module pipelined(
     writeback writeback (
         .resultsrc_w(resultsrc_w),
         .aluresult_w(aluresult_w), .pcplus4_w(pcplus4_w), .rdata_w(rdata_w),
-        .result(result_w)
+        .result(result_w), .uimm_w(uimm_w)
     );
 
     controller ctl (
@@ -127,17 +127,18 @@ module pipelined(
         .rs1_d(instr_d[19:15]), .rs2_d(instr_d[24:20]), .rd_e(rd_e),
         .forward1(forward1), .forward2(forward2),
         .pcsrc_e(pcsrc_e), .flushd(flushd), .flushe(flushe),
-        .stallf(stallf), .stalld(stalld), .resultsrc_e0(resultsrc_e[0])
+        .stallf(stallf), .stalld(stalld), .resultsrc_e(resultsrc_e)
     );
 
     // datapath signals
     always @(posedge clk, posedge reset) begin
         // flush all signals from pipeline at reset
+        // TODO: this is disgusting and not actually needed? isn't it enough to deassert memwrite/regwrite
         if (reset) begin
             {instr_d, pc_d, pcplus4_d} <= 96'b0;
-            {rs1d_e, rs2d_e, rs1_e, rs2_e, rd_e, pcplus4_e, pc_e, immext_e} <= 175'b0;
-            {rd_m, pcplus4_m, wdata_m, aluresult_m} <= 101'b0;
-            {rd_w, pcplus4_w, rdata_w, aluresult_w} <= 101'b0;
+            {rs1d_e, rs2d_e, rs1_e, rs2_e, rd_e, pcplus4_e, pc_e, immext_e, uimm_e} <= 207'b0;
+            {rd_m, pcplus4_m, wdata_m, aluresult_m, uimm_m} <= 133'b0;
+            {rd_w, pcplus4_w, aluresult_w, uimm_w} <= 101'b0;
             {controls_e, controls_m, controls_w} <= 16'b0;
         end else begin
             if (flushd)
@@ -146,15 +147,15 @@ module pipelined(
                 {instr_d, pc_d, pcplus4_d} <= {instr_f, pc_f, pcplus4_f};
 
             if (flushe)
-                {rs1d_e, rs2d_e, rs1_e, rs2_e, rd_e, pcplus4_e, pc_e, immext_e} <= 175'b0;
+                {rs1d_e, rs2d_e, rs1_e, rs2_e, rd_e, pcplus4_e, pc_e, immext_e, uimm_e} <= 175'b0;
             else
-                {rs1d_e, rs2d_e, rs1_e, rs2_e, rd_e, pcplus4_e, pc_e, immext_e} <= {
+                {rs1d_e, rs2d_e, rs1_e, rs2_e, rd_e, pcplus4_e, pc_e, immext_e, uimm_e} <= {
                         rs1d_d, rs2d_d, instr_d[19:15], instr_d[24:20], instr_d[11:7],
-                        pcplus4_d, pc_d, immext_d
+                        pcplus4_d, pc_d, immext_d, uimm_d
                 };
 
-            {rd_m, pcplus4_m, wdata_m, aluresult_m} <= {rd_e, pcplus4_e, src2, aluresult_e};
-            {rd_w, pcplus4_w, rdata_w, aluresult_w} <= {rd_m, pcplus4_m, rdata_m, aluresult_m};
+            {rd_m, pcplus4_m, wdata_m, aluresult_m, uimm_m} <= {rd_e, pcplus4_e, src2, aluresult_e, uimm_e};
+            {rd_w, pcplus4_w, aluresult_w, uimm_w} <= {rd_m, pcplus4_m, aluresult_m, uimm_m};
             {controls_e, controls_m, controls_w} <= {
                 controls_d[11:2], controls_e[9:6], controls_m[3:1]
             };
@@ -166,20 +167,25 @@ module hazard (
     input regwrite_m, regwrite_w,
     input [4:0] rs1_d, rs2_d, rs1_e, rs2_e, rd_e, rd_m, rd_w,
     output reg [1:0] forward1, forward2,
-    input pcsrc_e, resultsrc_e0,
+    input [1:0] resultsrc_e,
+    input pcsrc_e,
     output stalld, stallf,
     output flushd, flushe
 );
     // forward
     always @(*) begin
-        if ((regwrite_m & rs1_e == rd_m) & rs1_e != 0)
+        if (resultsrc_e == 2'b11 & rs1_e == rd_m)
+            forward1 = 2'b11;
+        else if ((regwrite_m & rs1_e == rd_m) & rs1_e != 0)
             forward1 = 2'b10;
         else if ((regwrite_w & rs1_e == rd_w) & rs1_e != 0)
             forward1 = 2'b01;
         else
             forward1 = 2'b00;
 
-        if ((regwrite_m & rs2_e == rd_m) & rs2_e != 0)
+        if (resultsrc_e == 2'b11 & rs2_e == rd_m)
+            forward2 = 2'b11;
+        else if ((regwrite_m & rs2_e == rd_m) & rs2_e != 0)
             forward2 = 2'b10;
         else if ((regwrite_w & rs2_e == rd_w) & rs2_e != 0)
             forward2 = 2'b01;
@@ -188,7 +194,7 @@ module hazard (
     end
 
     // stall
-    wire lwstall = (rd_e == rs1_d | rd_e == rs2_d) & resultsrc_e0;
+    wire lwstall = (rd_e == rs1_d | rd_e == rs2_d) & (resultsrc_e == 2'b01);
     assign {stallf, stalld} = {2{lwstall}};
 
     // flush
@@ -221,13 +227,16 @@ module decode (
     input [31:0] result_w,
     input [4:0] rd_w,
     input [1:0] immsrc_d,
-    output [31:0] rs1d, rs2d, immext
+    output [31:0] rs1d, rs2d, immext, uimm
 );
     register_file reg_file (
         .clk(clk), .we3(regwrite_w),
         .addr1(instr_d[19:15]), .addr2(instr_d[24:20]), .addr3(rd_w),
         .rd1(rs1d), .rd2(rs2d), .wd3(result_w)
     );
+
+    wire is_lui = instr_d[6:0] == 7'b0110111;
+    assign uimm = {instr_d[31:12], 12'b0};
 
     extend ext (.instr(instr_d[31:7]), .immsrc(immsrc_d), .immext(immext));
 endmodule
@@ -250,14 +259,14 @@ endmodule
 
 module writeback (
     input [1:0] resultsrc_w,
-    input [31:0] aluresult_w, pcplus4_w, rdata_w,
+    input [31:0] aluresult_w, pcplus4_w, rdata_w, uimm_w,
     output reg [31:0] result
 );
     always @(*) case(resultsrc_w)
         2'b00: result = aluresult_w;
         2'b01: result = rdata_w;
         2'b10: result = pcplus4_w;
-        default: result = 31'bx;
+        2'b11: result = uimm_w; // U-type immediate (LUI, AUIPC)
     endcase
 endmodule
 
@@ -277,6 +286,7 @@ module controller (
             7'b0100011: controls = 12'b000_01_00_1_0_1_0_0; // sw
             7'b1100011: controls = 12'b001_10_00_0_0_0_1_0; // beq
             7'b1101111: controls = 12'b000_11_10_0_1_0_0_1; // jal
+            7'b0110111: controls = 12'b000_xx_11_0_1_0_0_0; // lui
             7'b0?10011: begin // R-type or I-type ALU
                 controls[8:0] = opcode[5] ? 9'bxx_00_0_1_0_0_0 : 9'b00_00_1_1_0_0_0;
                 case (funct3)

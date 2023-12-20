@@ -5,6 +5,8 @@ FAMILY = u
 DEVICE = up5k
 PACKAGE = sg48
 
+CPU = pipelined
+
 # TEST_OBJS = $(addsuffix .o,$(basename $(wildcard tests/*.S)))
 # FIRMWARE_OBJS = firmware/start.o firmware/irq.o firmware/print.o firmware/hello.o firmware/sieve.o firmware/multest.o firmware/stats.o
 # RISCV_GNU_TOOLCHAIN_INSTALL_PREFIX = /opt/riscv32
@@ -37,14 +39,14 @@ sim: cpu_tb.vcd
 # 	$(TOOLCHAIN_PREFIX)gcc -c -mabi=ilp32 -march=rv32im -o $@ -DTEST_FUNC_NAME=$(notdir $(basename $<)) \
 # 		-DTEST_FUNC_TXT='"$(notdir $(basename $<))"' -DTEST_FUNC_RET=$(notdir $(basename $<))_ret $<
 
-cpu_tb.vcd: cpu_tb
+cpu_tb.vcd: cpu_tb.vvp
 	vvp -N $< +vcd=$@
 
-cpu_tb: cpu_tb.v pipelined.v
-	iverilog -g2001 -Wall -DSIM -o $@ $^
+cpu_tb.vvp: cpu_tb.v $(CPU).v spram.v
+	iverilog -g2005-sv -Wall -DSIM -o $@ $^ `yosys-config --datdir/ice40/cells_sim.v`
 
-demo.json: demo.v
-	yosys -p 'synth_ice40 -device $(FAMILY) -top top -json $@' $< pipelined.v
+demo.json: demo.v $(CPU).v spram.v
+	yosys -p 'synth_ice40 -device $(FAMILY) -top top -json $@' $^
 
 demo.asc: demo.json
 	nextpnr-ice40 --$(DEVICE) --package $(PACKAGE) --freq $(FREQ) --asc $@ --pcf $(PIN_DEF) --json $<
