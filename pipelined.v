@@ -127,7 +127,7 @@ module pipelined(
         .rs1_d(instr_d[19:15]), .rs2_d(instr_d[24:20]), .rd_e(rd_e),
         .forward1(forward1), .forward2(forward2),
         .pcsrc_e(pcsrc_e), .flushd(flushd), .flushe(flushe),
-        .stallf(stallf), .stalld(stalld), .resultsrc_e(resultsrc_e)
+        .stallf(stallf), .stalld(stalld), .resultsrc_e(resultsrc_e), .resultsrc_m(resultsrc_m)
     );
 
     // datapath signals
@@ -167,14 +167,14 @@ module hazard (
     input regwrite_m, regwrite_w,
     input [4:0] rs1_d, rs2_d, rs1_e, rs2_e, rd_e, rd_m, rd_w,
     output reg [1:0] forward1, forward2,
-    input [1:0] resultsrc_e,
+    input [1:0] resultsrc_e, resultsrc_m,
     input pcsrc_e,
     output stalld, stallf,
     output flushd, flushe
 );
     // forward
     always @(*) begin
-        if (resultsrc_e == 2'b11 & rs1_e == rd_m)
+        if (resultsrc_m == 2'b11 & rs1_e == rd_m)
             forward1 = 2'b11;
         else if ((regwrite_m & rs1_e == rd_m) & rs1_e != 0)
             forward1 = 2'b10;
@@ -183,7 +183,7 @@ module hazard (
         else
             forward1 = 2'b00;
 
-        if (resultsrc_e == 2'b11 & rs2_e == rd_m)
+        if (resultsrc_m == 2'b11 & rs2_e == rd_m)
             forward2 = 2'b11;
         else if ((regwrite_m & rs2_e == rd_m) & rs2_e != 0)
             forward2 = 2'b10;

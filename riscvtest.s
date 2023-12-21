@@ -1,12 +1,3 @@
-# riscvtest.s
-# Sarah.Harris@unlv.edu
-# David_Harris@hmc.edu
-# 27 Oct 2020
-#
-# Test the RISC-V processor.
-#  add, sub, and, or, slt, addi, lw, sw, beq, jal
-# If successful, it should write the value 25 to address 100
-
 #       RISC-V Assembly         Description               Address   Machine Code
 main:   addi x2, x0, 5          # x2 = 5                  0         00500113
         addi x3, x0, 12         # x3 = 12                 4         00C00193
@@ -28,7 +19,10 @@ around: slt  x4, x7, x2         # x4 = (3 < 5)  = 1       28        0023A233
         addi x2, x0, 1          # shouldn't happen        44        00100113
 end:    add  x2, x2, x9         # x2 = (7 + 18)  = 25     48        00910133
         sw   x2, 0x20(x3)       # mem[100] = 25           4C        0221A023
+        # Drive LEDS
         lui  x3, 0x20           # x3 = 0x20000            50        000201b7
-        addi x4, x0, 0x1f       # x4 = 0x1f               54        01f00213
-        sw   x4, 0(x3)          # mem[0x20000] = 0x1f     58        0041a023
-done:   beq  x2, x2, done       # infinite loop           5C        00210063
+        addi x3, x3, 4          # x3 = 0x20004            54        00418193
+        addi x4, x0, 0x1f       # x4 = 0x1f               58        01f00213
+        sw   x4, 0(x3)          # mem[0x20004] = 0x1f     5C        0041a023
+        # UART loop
+done:   beq  x2, x2, done       # infinite loop           60        00210063

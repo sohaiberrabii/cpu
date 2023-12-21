@@ -5,6 +5,8 @@ module top (
 	output LED1, LED2, LED3, LED4, LED5,
 	output P1A1, P1A2, P1A3, P1A4, P1A7, P1A8, P1A9, P1A10,
 	output P1B1, P1B2, P1B3, P1B4, P1B7, P1B8, P1B9, P1B10,
+    input RX,
+    output TX,
 );
     // instruction memory
     wire [31:0] pc;
@@ -15,25 +17,45 @@ module top (
     // spram as data memory
     wire mem_write;
     wire [31:0] mem_addr, mem_wdata, ram_rdata;
+    wire isIO = mem_addr[17];
+    wire isRAM = ~isIO;
     spram128kB memory (
 		.clk(CLK),
-		.wen(mem_addr < 4 * 32768 ? {4{mem_write}} : 4'b0), // WORDS: 32k = 128kB / 4
+		.wen(isRAM ? {4{mem_write}} : 4'b0), // WORDS: 32k = 128kB / 4
 		.addr(mem_addr[16:2]),
 		.wdata(mem_wdata),
 		.rdata(ram_rdata)
 	);
 
-    // memory mapped io regs
-    wire [4:0] ioregs;
-    wire isIO = mem_addr[17];
+   localparam LEDS_BIT = 2;
+   localparam UART_DATA_BIT = 3;
+   localparam UART_CNTL_BIT = 4;
+
+    // leds
+    reg [4:0] ledregs;
     always @(posedge CLK)
         if (~BTN_N)
-            ioregs <= 0;
-        else if (mem_write)
-            ioregs <= mem_wdata[4:0];
+            ledregs <= 0;
+        else if (isIO & mem_write & mem_addr[LEDS_BIT])
+            ledregs <= mem_wdata;
+    assign {LED5, LED4, LED3, LED2, LED1} = ledregs;
 
-    assign {LED5, LED4, LED3, LED2, LED1} = ioregs;
-    wire [31:0] mem_rdata = isIO ? ioregs : ram_rdata;
+    // uart
+    wire uart_ready;
+    corescore_emitter_uart #(
+      .clk_freq_hz(12000000),
+      .baud_rate(115200)
+    ) uart (
+      .i_clk(CLK),
+      .i_rst(~BTN_N),
+      .i_data(mem_wdata[7:0]),
+      .i_valid(isIO & mem_addr[UART_DATA_BIT]),
+      .o_ready(uart_ready),
+      .o_uart_tx(TX)
+    );
+
+    wire [31:0] io_rdata = mem_addr[UART_CNTL_BIT] ? { 22'b0, !uart_ready, 9'b0} : 32'b0;
+    wire [31:0] mem_rdata = isRAM ? ram_rdata : io_rdata ;
 
     pipelined core (
         .clk(CLK), .reset(~BTN_N),
