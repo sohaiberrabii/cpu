@@ -45,7 +45,7 @@ cpu_tb.vcd: cpu_tb.vvp
 cpu_tb.vvp: cpu_tb.v $(CPU).v spram.v
 	iverilog -g2005-sv -Wall -DSIM -o $@ $^ `yosys-config --datdir/ice40/cells_sim.v`
 
-demo.json: demo.v $(CPU).v spram.v
+demo.json: demo.v $(CPU).v spram.v uart.v
 	yosys -p 'synth_ice40 -device $(FAMILY) -top top -json $@' $^
 
 demo.asc: demo.json
