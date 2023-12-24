@@ -19,7 +19,7 @@ module test;
 		.rdata(mem_rdata)
 	);
 
-    pipelined dut (
+    cpu dut (
         .clk(clk), .reset(reset),
         .pc(pc), .instr(instr),
         .mem_write(mem_write), .mem_addr(mem_addr),

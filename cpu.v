@@ -1,6 +1,6 @@
 `default_nettype none
 
-module pipelined(
+module cpu(
     input clk, reset,
     output [31:0] mem_addr,     // data address bus
     output [31:0] mem_wdata,    // data to be written
