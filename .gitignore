@@ -5,5 +5,8 @@ cpu_tb
 *.json
 *.asc
 *.bin
+*.o
+*.elf
+*.hex
 Makefile.conf
 cpu_tb.vvp

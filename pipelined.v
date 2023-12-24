@@ -1,10 +1,5 @@
 `default_nettype none
 
-// TODO: Track & Add missing instructions
-// | ALUreg | ALUimm | Jump  | Branch | LUI | AUIPC | Load  | Store | SYSTEM |
-// |--------|--------|-------|--------|-----|-------|-------|-------|--------|
-// |  / 10  | / 9    |   / 2 |   / 6  |  /1 |   /1  |  / 5  |   / 3 |   / 1  |
-
 module pipelined(
     input clk, reset,
     output [31:0] mem_addr,     // data address bus
