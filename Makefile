@@ -5,9 +5,12 @@ FAMILY = u
 DEVICE = up5k
 PACKAGE = sg48
 
-all: icebreaker.rpt icebreaker.bin
+# riscv prefix
+TOOLCHAIN_PREFIX = riscv32-unknown-elf-
 
-sim: cpu_tb.vcd
+all: icebreaker.rpt icebreaker.bin firmware.hex
+
+sim: cpu_tb.vcd firmware.hex
 
 cpu_tb.vcd: cpu_tb.vvp
 	vvp -N $< +vcd=$@
@@ -30,8 +33,20 @@ icebreaker.rpt: icebreaker.asc
 prog: icebreaker.bin
 	iceprog $<
 
+%.o: %.S
+	$(TOOLCHAIN_PREFIX)gcc -c -mabi=ilp32 -march=rv32i -o $@ $<
+
+firmware.bin: start.o
+	$(TOOLCHAIN_PREFIX)objcopy -O binary $< $@
+
+# firmware.elf: start.o sections.lds
+# 	$(TOOLCHAIN_PREFIX)ld -o $@ -T sections.lds start.o
+
+firmware.hex: firmware.bin makehex.py
+	python3 makehex.py $< 256 > $@
+
 clean:
-	rm -f icebreaker.{bin,json,rpt,asc} cpu_tb.vcd cpu_syn.v *.o *.elf *.hex
+	rm -f icebreaker.{json,rpt,asc} cpu_tb.vcd cpu_syn.v *.o *.elf *.hex *.bin
 
 .PHONY: all prog sim
 .PRECIOUS: cpu_tb.vcd
