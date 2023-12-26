@@ -34,10 +34,11 @@ module cpu(
     wire [31:0] rs1d_d, rs2d_d, immext_d, uimm_d;
     wire [2:0] aluctl_d;
     wire [1:0] immsrc_d, resultsrc_d;
-    wire alusrc_d, regwrite_d, memwrite_d, branch_d, jump_d;
-    wire [11:0] controls_d;
+    wire alusrc_d, regwrite_d, memwrite_d, nbranch_d, branch_d, jump_d;
+    wire [12:0] controls_d;
     assign controls_d = {
-        regwrite_d, resultsrc_d, memwrite_d, branch_d, jump_d, aluctl_d, alusrc_d, immsrc_d
+        regwrite_d, resultsrc_d, memwrite_d, nbranch_d, branch_d,
+        jump_d, aluctl_d, alusrc_d, immsrc_d
     };
 
     // Execute stage signals
@@ -47,10 +48,10 @@ module cpu(
     wire [31:0] aluresult_e, pctarget_e;
     wire [2:0] aluctl_e;
     wire [1:0] resultsrc_e;
-    wire zero_e, alusrc_e, regwrite_e, memwrite_e, branch_e, jump_e, pcsrc_e;
-    reg [9:0] controls_e;
+    wire zero_e, alusrc_e, regwrite_e, memwrite_e, nbranch_e, branch_e, jump_e, pcsrc_e;
+    reg [10:0] controls_e;
     assign {
-        regwrite_e, resultsrc_e, memwrite_e, branch_e, jump_e, aluctl_e, alusrc_e
+        regwrite_e, resultsrc_e, memwrite_e, nbranch_e, branch_e, jump_e, aluctl_e, alusrc_e
     } = controls_e;
 
     // Writeback stage signals
@@ -66,7 +67,7 @@ module cpu(
     wire [1:0] forward1, forward2;
     wire flushd, flushe, stallf, stalld, forward_d;
 
-    assign pcsrc_e = zero_e & branch_e | jump_e;
+    assign pcsrc_e = (nbranch_e ? ~zero_e : zero_e) & branch_e | jump_e;
     fetch fetch (
         .clk(clk), .ce(~stallf), .reset(reset), .pcsrc_e(pcsrc_e),
         .pctarget_e(pctarget_e),
@@ -113,7 +114,7 @@ module cpu(
         .opcode(instr_d[6:0]), .funct3(instr_d[14:12]), .funct75(instr_d[30]),
         .alusrc(alusrc_d), .immsrc(immsrc_d), .resultsrc(resultsrc_d),
         .branch(branch_d), .jump(jump_d), .memwrite(memwrite_d), .regwrite(regwrite_d),
-        .aluctl(aluctl_d)
+        .aluctl(aluctl_d), .nbranch(nbranch_d)
     );
 
     hazard hzd (
@@ -134,7 +135,7 @@ module cpu(
             {rs1d_e, rs2d_e, rs1_e, rs2_e, rd_e, pcplus4_e, pc_e, immext_e, uimm_e} <= 207'b0;
             {rd_m, pcplus4_m, wdata_m, aluresult_m, uimm_m} <= 133'b0;
             {rd_w, pcplus4_w, aluresult_w, uimm_w} <= 101'b0;
-            {controls_e, controls_m, controls_w} <= 16'b0;
+            {controls_e, controls_m, controls_w} <= 17'b0;
         end else begin
             if (flushd)
                 {instr_d, pc_d, pcplus4_d} <= 96'b0;
@@ -152,7 +153,7 @@ module cpu(
             {rd_m, pcplus4_m, wdata_m, aluresult_m, uimm_m} <= {rd_e, pcplus4_e, src2, aluresult_e, uimm_e};
             {rd_w, pcplus4_w, aluresult_w, uimm_w} <= {rd_m, pcplus4_m, aluresult_m, uimm_m};
             {controls_e, controls_m, controls_w} <= {
-                controls_d[11:2], controls_e[9:6], controls_m[3:1]
+                controls_d[12:2], controls_e[10:7], controls_m[3:1]
             };
         end
     end
@@ -169,7 +170,7 @@ module hazard (
 );
     // forward
     always @(*) begin
-        if (resultsrc_m == 2'b11 & rs1_e == rd_m)
+        if (resultsrc_m == 2'b11 & rs1_e == rd_m & rs1_e != 0)
             forward1 = 2'b11;
         else if ((regwrite_m & rs1_e == rd_m) & rs1_e != 0)
             forward1 = 2'b10;
@@ -178,7 +179,7 @@ module hazard (
         else
             forward1 = 2'b00;
 
-        if (resultsrc_m == 2'b11 & rs2_e == rd_m)
+        if (resultsrc_m == 2'b11 & rs2_e == rd_m & rs2_e != 0)
             forward2 = 2'b11;
         else if ((regwrite_m & rs2_e == rd_m) & rs2_e != 0)
             forward2 = 2'b10;
@@ -267,32 +268,32 @@ endmodule
 
 module controller (
     input [6:0] opcode, input [2:0] funct3, input funct75, // funct7[5]
-    output branch, jump, alusrc, regwrite, memwrite,
+    output nbranch, branch, jump, alusrc, regwrite, memwrite,
     output [1:0] resultsrc, immsrc,
     output [2:0] aluctl
 );
-    reg [11:0] controls;
-    assign {aluctl, immsrc, resultsrc, alusrc, regwrite, memwrite, branch, jump} = controls;
+    reg [12:0] controls;
+    assign {aluctl, immsrc, resultsrc, alusrc, regwrite, memwrite, branch, jump, nbranch} = controls;
 
     always @(*) begin
         casez (opcode)
-            // aluctl_immsrc_resultsrc_alusrc_regwrite_memwrite_branch_jump
-            7'b0000011: controls = 12'b000_00_01_1_1_0_0_0; // lw
-            7'b0100011: controls = 12'b000_01_00_1_0_1_0_0; // sw
-            7'b1100011: controls = 12'b001_10_00_0_0_0_1_0; // beq
-            7'b1101111: controls = 12'b000_11_10_0_1_0_0_1; // jal
-            7'b0110111: controls = 12'b000_xx_11_0_1_0_0_0; // lui
+            // aluctl_immsrc_resultsrc_alusrc_regwrite_memwrite_branch_jump_nbranch
+            7'b0000011: controls = 13'b000_00_01_1_1_0_0_0_0; // lw
+            7'b0100011: controls = 13'b000_01_00_1_0_1_0_0_0; // sw
+            7'b1100011: controls = {12'b001_10_00_0_0_0_1_0, funct3[0]}; // beq, bne
+            7'b1101111: controls = 13'b000_11_10_0_1_0_0_1_0; // jal
+            7'b0110111: controls = 13'b000_xx_11_0_1_0_0_0_0; // lui
             7'b0?10011: begin // R-type or I-type ALU
-                controls[8:0] = opcode[5] ? 9'bxx_00_0_1_0_0_0 : 9'b00_00_1_1_0_0_0;
+                controls[9:0] = opcode[5] ? 10'bxx_00_0_1_0_0_0_0 : 10'b00_00_1_1_0_0_0_0;
                 case (funct3)
-                    3'b000: controls[11:9] = (funct75 & opcode[5]) ? 3'b001 : 3'b000; // sub,add,addi
-                    3'b010: controls[11:9] = 3'b101; // slt, slti
-                    3'b110: controls[11:9] = 3'b011; // or, ori
-                    3'b111: controls[11:9] = 3'b010; // and, andi
-                    default: controls[11:9] = 3'bxxx; // unassigned alu controls
+                    3'b000: controls[12:10] = (funct75 & opcode[5]) ? 3'b001 : 3'b000; // sub,add,addi
+                    3'b010: controls[12:10] = 3'b101; // slt, slti
+                    3'b110: controls[12:10] = 3'b011; // or, ori
+                    3'b111: controls[12:10] = 3'b010; // and, andi
+                    default: controls[12:10] = 3'bxxx; // unassigned alu controls
                 endcase
             end
-            default: controls = 12'bxxx_xx_xx_x_x_x_x_x; // not implemented
+            default: controls = 13'bxxx_xx_xx_x_x_x_x_x; // not implemented
         endcase
     end
 endmodule

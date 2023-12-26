@@ -10,9 +10,9 @@ TOOLCHAIN_PREFIX = riscv32-unknown-elf-
 
 all: icebreaker.rpt icebreaker.bin firmware.hex
 
-sim: cpu_tb.vcd firmware.hex
+sim: cpu_tb.vcd
 
-cpu_tb.vcd: cpu_tb.vvp
+cpu_tb.vcd: cpu_tb.vvp firmware.hex
 	vvp -N $< +vcd=$@
 
 cpu_tb.vvp: cpu_tb.v cpu.v spram.v
