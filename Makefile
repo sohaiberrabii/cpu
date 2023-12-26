@@ -11,12 +11,22 @@ TOOLCHAIN_PREFIX = riscv32-unknown-elf-
 all: icebreaker.rpt icebreaker.bin firmware.hex
 
 sim: cpu_tb.vcd
+synsim: cpu_syntb.vcd
 
 cpu_tb.vcd: cpu_tb.vvp firmware.hex
 	vvp -N $< +vcd=$@
 
+cpu_syntb.vcd: cpu_syntb.vvp firmware.hex
+	vvp -N $< +vcd=$@
+
 cpu_tb.vvp: cpu_tb.v cpu.v spram.v
-	iverilog -g2005-sv -Wall -DSIM -o $@ $^ `yosys-config --datdir/ice40/cells_sim.v`
+	iverilog -g2005-sv -o $@ $^ `yosys-config --datdir/ice40/cells_sim.v`
+
+cpu_syntb.vvp: cpu_tb.v synth.v
+	iverilog -o $@ $^
+
+synth.v: cpu.v
+	yosys -qv3 -l synth.log -p 'read_verilog $<; hierarchy -top cpu; synth; write_verilog $@'
 
 icebreaker.json: icebreaker.v cpu.v spram.v uart.v
 	yosys -p 'synth_ice40 -device $(FAMILY) -top top -json $@' $^
@@ -43,10 +53,10 @@ firmware.bin: start.o
 # 	$(TOOLCHAIN_PREFIX)ld -o $@ -T sections.lds start.o
 
 firmware.hex: firmware.bin makehex.py
-	python3 makehex.py $< 256 > $@
+	python3 makehex.py $< 32768 > $@
 
 clean:
-	rm -f icebreaker.{json,rpt,asc} cpu_tb.vcd cpu_syn.v *.o *.elf *.hex *.bin
+	rm -f icebreaker.{json,rpt,asc} *.log *.vvp *.vcd synth.v *.o *.elf *.hex *.bin
 
 .PHONY: all prog sim
 .PRECIOUS: cpu_tb.vcd

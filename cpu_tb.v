@@ -1,22 +1,21 @@
 module test;
-    wire [31:0] mem_wdata, mem_rdata, mem_addr;
-    wire mem_write;
     reg clk, reset;
 
-    // instruction memory
-    wire [31:0] pc;
-    reg [31:0] imem[0:255];
-    initial $readmemh("firmware.hex", imem);
-    wire [31:0] instr = imem[pc[31:2]];
+    // memory
+    reg [31:0] mem[0:32767];
+    initial $readmemh("firmware.hex", mem);
 
-    // data memory
-    spram128kB memory (
-		.clk(clk),
-		.wen({4{mem_write}}),
-		.addr(mem_addr[16:2]),
-		.wdata(mem_wdata),
-		.rdata(mem_rdata)
-	);
+    wire mem_write;
+    wire [31:0] mem_wdata, mem_addr;
+    reg [31:0] mem_rdata;
+    always @(posedge clk)
+        if (mem_write)
+            mem[mem_addr[16:2]] <= mem_wdata;
+        else
+            mem_rdata <= mem[mem_addr[16:2]];
+
+    wire [31:0] pc;
+    wire [31:0] instr = mem[pc[31:2]];
 
     cpu dut (
         .clk(clk), .reset(reset),
@@ -29,7 +28,7 @@ module test;
     reg [8*32:1] vcdfn;
     initial begin
         if ($value$plusargs("vcd=%s", vcdfn)) $dumpfile(vcdfn);
-        $dumpvars;
+        $dumpvars(0, test);
         /* reset <= 1; # 22; reset <= 0; */
         reset <= 1; #22 reset <= 0;
     end
