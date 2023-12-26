@@ -11,16 +11,17 @@ TOOLCHAIN_PREFIX = riscv32-unknown-elf-
 all: icebreaker.rpt icebreaker.bin firmware.hex
 
 sim: cpu_tb.vcd
+
 synsim: cpu_syntb.vcd
 
-cpu_tb.vcd: cpu_tb.vvp firmware.hex
+%.vcd: %.vvp firmware.hex
 	vvp -N $< +vcd=$@
 
 cpu_syntb.vcd: cpu_syntb.vvp firmware.hex
 	vvp -N $< +vcd=$@
 
-cpu_tb.vvp: cpu_tb.v cpu.v spram.v
-	iverilog -g2005-sv -o $@ $^ `yosys-config --datdir/ice40/cells_sim.v`
+cpu_tb.vvp: cpu_tb.v cpu.v
+	iverilog -g2005-sv -o $@ $^
 
 cpu_syntb.vvp: cpu_tb.v synth.v
 	iverilog -o $@ $^
@@ -28,7 +29,12 @@ cpu_syntb.vvp: cpu_tb.v synth.v
 synth.v: cpu.v
 	yosys -qv3 -l synth.log -p 'read_verilog $<; hierarchy -top cpu; synth; write_verilog $@'
 
-icebreaker.json: icebreaker.v cpu.v spram.v uart.v
+icebsim: icebreaker_tb.vcd
+
+icebreaker_tb.vvp: icebreaker_tb.v icebreaker.v spram.v uart.v cpu.v
+	iverilog -g2005-sv -o $@ $^ `yosys-config --datdir/ice40/cells_sim.v`
+
+icebreaker.json: icebreaker.v spram.v uart.v cpu.v
 	yosys -p 'synth_ice40 -device $(FAMILY) -top top -json $@' $^
 
 icebreaker.asc: icebreaker.json

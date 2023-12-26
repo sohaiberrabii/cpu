@@ -1,6 +1,6 @@
 cpu
-cpu_syn.v
 cpu_tb
+synth.v
 *.vcd
 *.json
 *.asc
@@ -8,5 +8,6 @@ cpu_tb
 *.o
 *.elf
 *.hex
+*.vvp
+*.rpt
 Makefile.conf
-cpu_tb.vvp

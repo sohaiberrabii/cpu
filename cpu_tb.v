@@ -1,10 +1,15 @@
 module test;
-    reg clk, reset;
+    reg clk = 0;
+    always #5 clk = ~clk;
+
+    // TODO: fix reset shenanigans to not need it on start
+    // probably due to ffs needing reset for initialization?
+    reg reset = 1;
+    initial #5 reset <= 0;
 
     // memory
     reg [31:0] mem[0:32767];
     initial $readmemh("firmware.hex", mem);
-
     wire mem_write;
     wire [31:0] mem_wdata, mem_addr;
     reg [31:0] mem_rdata;
@@ -29,18 +34,11 @@ module test;
     initial begin
         if ($value$plusargs("vcd=%s", vcdfn)) $dumpfile(vcdfn);
         $dumpvars(0, test);
-        /* reset <= 1; # 22; reset <= 0; */
-        reset <= 1; #22 reset <= 0;
-    end
-
-    // generate clock to sequence tests
-    always begin
-        clk <= 1; # 5; clk <= 0; # 5;
     end
 
     // check results
     always @(negedge clk) begin
-        if(mem_write & mem_addr == 32'h20008)
+        if(mem_write & mem_addr == 32'h20004)
             if(mem_wdata == 0) begin
                 $display("Simulation succeeded");
                 $finish;

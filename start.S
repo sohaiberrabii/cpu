@@ -17,12 +17,12 @@ start:
     TEST_RR(7,  add, 0x0000000a, 0x00000003, 0x00000007)
     TEST_RR(8,  add, 0x0abcde00, 0x80000000, 0x8abcde00)
 
-    li x2, 0x20008
+    li x2, 0x20004
     sw zero, 0(x2)
 
 // infinite loop
 pass: beq x2, x2, pass
 
 fail:
-    li x2, 0x20008
+    li x2, 0x20004
     sw x30, 0(x2)
