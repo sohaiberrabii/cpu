@@ -138,23 +138,24 @@ module cpu(
             {controls_e, controls_m, controls_w} <= 17'b0;
         end else begin
             if (flushd)
-                {instr_d, pc_d, pcplus4_d} <= 96'b0;
+                {instr_d, pc_d, pcplus4_d} <= 109'b0;
             else if (~stalld)
                 {instr_d, pc_d, pcplus4_d} <= {instr_f, pc_f, pcplus4_f};
 
             if (flushe)
-                {rs1d_e, rs2d_e, rs1_e, rs2_e, rd_e, pcplus4_e, pc_e, immext_e, uimm_e} <= 175'b0;
-            else
+                {rs1d_e, rs2d_e, rs1_e, rs2_e, rd_e, pcplus4_e, pc_e, immext_e, uimm_e,
+                    controls_e} <= 186'b0;
+            else begin
                 {rs1d_e, rs2d_e, rs1_e, rs2_e, rd_e, pcplus4_e, pc_e, immext_e, uimm_e} <= {
                         rs1d_d, rs2d_d, instr_d[19:15], instr_d[24:20], instr_d[11:7],
                         pcplus4_d, pc_d, immext_d, uimm_d
                 };
+                controls_e <= controls_d[12:2];
+            end
 
             {rd_m, pcplus4_m, wdata_m, aluresult_m, uimm_m} <= {rd_e, pcplus4_e, src2, aluresult_e, uimm_e};
             {rd_w, pcplus4_w, aluresult_w, uimm_w} <= {rd_m, pcplus4_m, aluresult_m, uimm_m};
-            {controls_e, controls_m, controls_w} <= {
-                controls_d[12:2], controls_e[10:7], controls_m[3:1]
-            };
+            {controls_m, controls_w} <= {controls_e[10:7], controls_m[3:1]};
         end
     end
 endmodule

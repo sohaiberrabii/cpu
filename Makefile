@@ -61,8 +61,11 @@ firmware.bin: start.o
 firmware.hex: firmware.bin makehex.py
 	python3 makehex.py $< 32768 > $@
 
-clean:
-	rm -f icebreaker.{json,rpt,asc} *.log *.vvp *.vcd synth.v *.o *.elf *.hex *.bin
+dis: start.o
+	riscv32-unknown-elf-objdump -Mnumeric -d $< > start.dis
 
-.PHONY: all prog sim
+clean:
+	rm -f icebreaker.{json,rpt,asc} *.log *.vvp *.vcd synth.v *.o *.elf *.hex *.bin start.dis
+
+.PHONY: all prog sim synsim icebsim dis
 .PRECIOUS: cpu_tb.vcd

@@ -1,7 +1,9 @@
+#define TESTNUM x30
+
 #define TEST_CASE(testnum, rd, expected, instrs...) \
     instrs; \
     li x31, expected; \
-    li x30, testnum; \
+    li TESTNUM, testnum; \
     bne rd, x31, fail
 
 #define TEST_RR(testnum, inst, expected, val1, val2) \
