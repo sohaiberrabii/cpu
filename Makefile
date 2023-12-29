@@ -52,20 +52,20 @@ prog: icebreaker.bin
 %.o: %.S
 	$(TOOLCHAIN_PREFIX)gcc -c -mabi=ilp32 -march=rv32i -o $@ $<
 
-firmware.bin: start.o
+firmware.bin: firmware.elf
 	$(TOOLCHAIN_PREFIX)objcopy -O binary $< $@
 
-# firmware.elf: start.o sections.lds
-# 	$(TOOLCHAIN_PREFIX)ld -o $@ -T sections.lds start.o
+firmware.elf: start.o sections.lds
+	$(TOOLCHAIN_PREFIX)ld -o $@ -T sections.lds start.o
 
 firmware.hex: firmware.bin makehex.py
 	python3 makehex.py $< 32768 > $@
 
-dis: start.o
-	riscv32-unknown-elf-objdump -Mnumeric -d $< > start.dis
+dis: firmware.elf
+	riscv32-unknown-elf-objdump -Mnumeric -d $< > firmware.dis
 
 clean:
-	rm -f icebreaker.{json,rpt,asc} *.log *.vvp *.vcd synth.v *.o *.elf *.hex *.bin start.dis
+	rm -f icebreaker.{json,rpt,asc} *.log *.vvp *.vcd synth.v *.o *.elf *.hex *.bin *.dis
 
 .PHONY: all prog sim synsim icebsim dis
 .PRECIOUS: cpu_tb.vcd

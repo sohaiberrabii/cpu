@@ -265,7 +265,7 @@ module writeback (
         2'b00: result = aluresult_w;
         2'b01: result = rdata_w;
         2'b10: result = pcplus4_w;
-        2'b11: result = imm_w; // U-type immediate (LUI, AUIPC)
+        2'b11: result = imm_w; // LUI
     endcase
 endmodule
 
@@ -288,7 +288,7 @@ module controller (
             7'b1100011: controls = {13'b001_010_00_0_0_0_1_0, funct3[0], 1'b0}; // beq, bne
             7'b1101111: controls = 15'b000_011_10_0_1_0_0_1_0_0; // jal
             7'b0110111: controls = 15'b000_100_11_0_1_0_0_0_0_0; // lui
-            7'b0010111: controls = 15'b000_100_11_1_1_0_0_0_0_1; // auipc
+            7'b0010111: controls = 15'b000_100_00_1_1_0_0_0_0_1; // auipc
             7'b0?10011: begin // R-type or I-type ALU
                 controls[11:0] = opcode[5] ? 12'bxx_000_0_1_0_0_0_0_0 : 12'b00_000_1_1_0_0_0_0_0;
                 case (funct3)

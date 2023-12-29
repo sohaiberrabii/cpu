@@ -13,17 +13,16 @@ start:
     TEST_CASE(4, x0, 0, lui x0, 0x10000)
 
     // auipc
-    // TODO: we need to get label addresses, and for that we need to add firmware linking
-    /* TEST_CASE(5, a0, 10000, */
-    /*   lla a0, 1f + 10000; \ */
-    /*   jal a1, 1f; \ */
-    /*   1: sub a0, a0, a1 */
-    /* ) */
-    /* TEST_CASE(6, a0, -10000, \ */
-    /*   lla a0, 1f - 10000; \ */
-    /*   jal a1, 1f; \ */
-    /*   1: sub a0, a0, a1 */
-    /* ) */
+    TEST_CASE(5, a0, 10000,
+      lla a0, 1f + 10000; \
+      jal a1, 1f; \
+      1: sub a0, a0, a1
+    )
+    TEST_CASE(6, a0, -10000, \
+      lla a0, 1f - 10000; \
+      jal a1, 1f; \
+      1: sub a0, a0, a1
+    )
 
     // add
     TEST_RR(7,  add, 0x00000000, 0x00000000, 0x00000000)
