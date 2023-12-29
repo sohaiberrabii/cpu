@@ -12,34 +12,60 @@ start:
     TEST_CASE(3, x1, 0xabcde000, lui x1, 0xabcde)
     TEST_CASE(4, x0, 0, lui x0, 0x10000)
 
+    // auipc
+    // TODO: we need to get label addresses, and for that we need to add firmware linking
+    /* TEST_CASE(5, a0, 10000, */
+    /*   lla a0, 1f + 10000; \ */
+    /*   jal a1, 1f; \ */
+    /*   1: sub a0, a0, a1 */
+    /* ) */
+    /* TEST_CASE(6, a0, -10000, \ */
+    /*   lla a0, 1f - 10000; \ */
+    /*   jal a1, 1f; \ */
+    /*   1: sub a0, a0, a1 */
+    /* ) */
+
     // add
-    TEST_RR(5,  add, 0x00000000, 0x00000000, 0x00000000)
-    TEST_RR(6,  add, 0x00000002, 0x00000001, 0x00000001)
-    TEST_RR(7,  add, 0x0000000a, 0x00000003, 0x00000007)
-    TEST_RR(8,  add, 0x0abcde00, 0x80000000, 0x8abcde00)
+    TEST_RR(7,  add, 0x00000000, 0x00000000, 0x00000000)
+    TEST_RR(8,  add, 0x00000000, 0x00000001, 0xffffffff)
+    TEST_RR(9,  add, 0x0000000a, 0x00000003, 0x00000007)
+    TEST_RR(10, add, 0x0abcde00, 0x80000000, 0x8abcde00)
 
     // jump tests
-    li TESTNUM, 9
+
+    // j
+    li TESTNUM, 11
     j test_next
     j fail
 test_next:
-
-    // delay slots
-    TEST_CASE(10, x2, 3, \
-        li  x2, 1; \
-        jal 1f; \
-        addi x2, x2, 1; \
-        addi x2, x2, 1; \
-    1:  addi x2, x2, 1; \
-        addi x2, x2, 1; \
-    )
-    TEST_CASE(10, x1, 3, \
+    TEST_CASE(12, x1, 3, \
         li  x1, 1; \
         j 1f; \
         addi x1, x1, 1; \
         addi x1, x1, 1; \
     1:  addi x1, x1, 1; \
         addi x1, x1, 1; \
+    )
+
+    // jal
+    li  TESTNUM, 13
+    li  ra, 0
+    linkaddr_2:
+      jal target_2
+      nop
+      nop
+      j fail
+    target_2:
+      la  x2, linkaddr_2
+      addi x2, x2, 4
+      bne x2, ra, fail
+    TEST_CASE(14, x2, 3, \
+        li  x2, 1; \
+        jal 1f; \
+        addi x2, x2, 1; \
+        addi x2, x2, 1; \
+    1:  addi x2, x2, 1; \
+        addi x2, x2, 1; \
     )
 
     li x2, 0x20004

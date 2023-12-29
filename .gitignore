@@ -11,3 +11,4 @@ synth.v
 *.vvp
 *.rpt
 Makefile.conf
+*.dis

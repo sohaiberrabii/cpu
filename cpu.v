@@ -11,7 +11,7 @@ module cpu(
 );
     // Memory stage signals
     reg [4:0] rd_m;
-    reg [31:0] aluresult_m, pcplus4_m, wdata_m, uimm_m;
+    reg [31:0] aluresult_m, pcplus4_m, wdata_m, immext_m;
     wire regwrite_m, memwrite_m;
     wire [1:0] resultsrc_m;
     reg [3:0] controls_m;
@@ -31,32 +31,36 @@ module cpu(
 
     // Decode stage signals
     reg [31:0] instr_d, pcplus4_d, pc_d;
-    wire [31:0] rs1d_d, rs2d_d, immext_d, uimm_d;
+    wire [31:0] rs1d_d, rs2d_d, immext_d;
     wire [2:0] aluctl_d;
-    wire [1:0] immsrc_d, resultsrc_d;
+    wire [2:0] immsrc_d;
+    wire [1:0] resultsrc_d;
     wire alusrc_d, regwrite_d, memwrite_d, nbranch_d, branch_d, jump_d;
-    wire [12:0] controls_d;
+    wire [14:0] controls_d;
+    wire is_auipc_d;
     assign controls_d = {
         regwrite_d, resultsrc_d, memwrite_d, nbranch_d, branch_d,
-        jump_d, aluctl_d, alusrc_d, immsrc_d
+        jump_d, aluctl_d, alusrc_d, is_auipc_d, immsrc_d
     };
 
     // Execute stage signals
+    wire is_auipc_e;
     reg [31:0] rs1d_e, rs2d_e;
     reg [4:0] rs1_e, rs2_e, rd_e;
-    reg [31:0] pcplus4_e, pc_e, immext_e, uimm_e;
+    reg [31:0] pcplus4_e, pc_e, immext_e;
     wire [31:0] aluresult_e, pctarget_e;
     wire [2:0] aluctl_e;
     wire [1:0] resultsrc_e;
     wire zero_e, alusrc_e, regwrite_e, memwrite_e, nbranch_e, branch_e, jump_e, pcsrc_e;
-    reg [10:0] controls_e;
+    reg [11:0] controls_e;
     assign {
-        regwrite_e, resultsrc_e, memwrite_e, nbranch_e, branch_e, jump_e, aluctl_e, alusrc_e
+        regwrite_e, resultsrc_e, memwrite_e, nbranch_e, branch_e, jump_e, aluctl_e, alusrc_e,
+        is_auipc_e
     } = controls_e;
 
     // Writeback stage signals
     reg [4:0] rd_w;
-    reg [31:0] aluresult_w, pcplus4_w, uimm_w;
+    reg [31:0] aluresult_w, pcplus4_w, immext_w;
     wire [31:0] result_w;
     wire regwrite_w;
     wire [1:0] resultsrc_w;
@@ -78,7 +82,7 @@ module cpu(
         .clk(clk), .instr_d(instr_d),
         .regwrite_w(regwrite_w), .result_w(result_w),
         .rd_w(rd_w), .immsrc_d(immsrc_d),
-        .rs1d(rs1d_d), .rs2d(rs2d_d), .immext(immext_d), .uimm(uimm_d)
+        .rs1d(rs1d_d), .rs2d(rs2d_d), .immext(immext_d)
     );
 
     // forward logic
@@ -88,33 +92,34 @@ module cpu(
            2'b00: src1 = rs1d_e;
            2'b01: src1 = result_w;
            2'b10: src1 = aluresult_m;
-           2'b11: src1 = uimm_m;
+           2'b11: src1 = immext_m;
         endcase
         case(forward2)
            2'b00: src2 = rs2d_e;
            2'b01: src2 = result_w;
            2'b10: src2 = aluresult_m;
-           2'b11: src2 = uimm_m;
+           2'b11: src2 = immext_m;
         endcase
     end
 
     execute execute(
         .src1(src1), .src2(src2),
         .pc_e(pc_e), .immext_e(immext_e), .alusrc_e(alusrc_e), .aluctl_e(aluctl_e),
-        .zero(zero_e), .aluresult(aluresult_e), .pctarget(pctarget_e)
+        .zero(zero_e), .aluresult(aluresult_e), .pctarget(pctarget_e), .is_auipc(is_auipc_e)
+
     );
 
     writeback writeback (
         .resultsrc_w(resultsrc_w),
         .aluresult_w(aluresult_w), .pcplus4_w(pcplus4_w), .rdata_w(rdata_w),
-        .result(result_w), .uimm_w(uimm_w)
+        .result(result_w), .imm_w(immext_w)
     );
 
     controller ctl (
         .opcode(instr_d[6:0]), .funct3(instr_d[14:12]), .funct75(instr_d[30]),
         .alusrc(alusrc_d), .immsrc(immsrc_d), .resultsrc(resultsrc_d),
         .branch(branch_d), .jump(jump_d), .memwrite(memwrite_d), .regwrite(regwrite_d),
-        .aluctl(aluctl_d), .nbranch(nbranch_d)
+        .aluctl(aluctl_d), .nbranch(nbranch_d), .is_auipc(is_auipc_d)
     );
 
     hazard hzd (
@@ -131,31 +136,31 @@ module cpu(
         // flush all signals from pipeline at reset
         // TODO: this is disgusting and not actually needed? isn't it enough to deassert memwrite/regwrite
         if (reset) begin
-            {instr_d, pc_d, pcplus4_d} <= 96'b0;
-            {rs1d_e, rs2d_e, rs1_e, rs2_e, rd_e, pcplus4_e, pc_e, immext_e, uimm_e} <= 207'b0;
-            {rd_m, pcplus4_m, wdata_m, aluresult_m, uimm_m} <= 133'b0;
-            {rd_w, pcplus4_w, aluresult_w, uimm_w} <= 101'b0;
-            {controls_e, controls_m, controls_w} <= 17'b0;
+            {instr_d, pc_d, pcplus4_d} <= 0;
+            {rs1d_e, rs2d_e, rs1_e, rs2_e, rd_e, pcplus4_e, pc_e, immext_e} <= 0;
+            {rd_m, pcplus4_m, wdata_m, aluresult_m, immext_m} <= 0;
+            {rd_w, pcplus4_w, aluresult_w, immext_w} <= 0;
+            {controls_e, controls_m, controls_w} <= 0;
         end else begin
             if (flushd)
-                {instr_d, pc_d, pcplus4_d} <= 109'b0;
+                {instr_d, pc_d, pcplus4_d} <= 0;
             else if (~stalld)
                 {instr_d, pc_d, pcplus4_d} <= {instr_f, pc_f, pcplus4_f};
 
             if (flushe)
-                {rs1d_e, rs2d_e, rs1_e, rs2_e, rd_e, pcplus4_e, pc_e, immext_e, uimm_e,
-                    controls_e} <= 186'b0;
+                {rs1d_e, rs2d_e, rs1_e, rs2_e, rd_e, pcplus4_e, pc_e, immext_e,
+                    controls_e} <= 0;
             else begin
-                {rs1d_e, rs2d_e, rs1_e, rs2_e, rd_e, pcplus4_e, pc_e, immext_e, uimm_e} <= {
+                {rs1d_e, rs2d_e, rs1_e, rs2_e, rd_e, pcplus4_e, pc_e, immext_e} <= {
                         rs1d_d, rs2d_d, instr_d[19:15], instr_d[24:20], instr_d[11:7],
-                        pcplus4_d, pc_d, immext_d, uimm_d
+                        pcplus4_d, pc_d, immext_d
                 };
-                controls_e <= controls_d[12:2];
+                controls_e <= controls_d[14:3];
             end
 
-            {rd_m, pcplus4_m, wdata_m, aluresult_m, uimm_m} <= {rd_e, pcplus4_e, src2, aluresult_e, uimm_e};
-            {rd_w, pcplus4_w, aluresult_w, uimm_w} <= {rd_m, pcplus4_m, aluresult_m, uimm_m};
-            {controls_m, controls_w} <= {controls_e[10:7], controls_m[3:1]};
+            {rd_m, pcplus4_m, wdata_m, aluresult_m, immext_m} <= {rd_e, pcplus4_e, src2, aluresult_e, immext_e};
+            {rd_w, pcplus4_w, aluresult_w, immext_w} <= {rd_m, pcplus4_m, aluresult_m, immext_m};
+            {controls_m, controls_w} <= {controls_e[11:8], controls_m[3:1]};
         end
     end
 endmodule
@@ -223,18 +228,14 @@ module decode (
     input regwrite_w,
     input [31:0] result_w,
     input [4:0] rd_w,
-    input [1:0] immsrc_d,
-    output [31:0] rs1d, rs2d, immext, uimm
+    input [2:0] immsrc_d,
+    output [31:0] rs1d, rs2d, immext
 );
     register_file reg_file (
         .clk(clk), .we3(regwrite_w),
         .addr1(instr_d[19:15]), .addr2(instr_d[24:20]), .addr3(rd_w),
         .rd1(rs1d), .rd2(rs2d), .wd3(result_w)
     );
-
-    wire is_lui = instr_d[6:0] == 7'b0110111;
-    assign uimm = {instr_d[31:12], 12'b0};
-
     extend ext (.instr(instr_d[31:7]), .immsrc(immsrc_d), .immext(immext));
 endmodule
 
@@ -245,69 +246,74 @@ module execute (
     input [2:0] aluctl_e,
     output zero,
     output [31:0] aluresult,
-    output [31:0] pctarget
+    output [31:0] pctarget,
+    input is_auipc
 );
     assign pctarget = pc_e + immext_e;
     alu alu (
-        .a(src1), .b(alusrc_e ? immext_e : src2),
+        .a(is_auipc ? pc_e : src1), .b(alusrc_e ? immext_e : src2),
         .ctl(aluctl_e), .res(aluresult), .zero(zero)
     );
 endmodule
 
 module writeback (
     input [1:0] resultsrc_w,
-    input [31:0] aluresult_w, pcplus4_w, rdata_w, uimm_w,
+    input [31:0] aluresult_w, pcplus4_w, rdata_w, imm_w,
     output reg [31:0] result
 );
     always @(*) case(resultsrc_w)
         2'b00: result = aluresult_w;
         2'b01: result = rdata_w;
         2'b10: result = pcplus4_w;
-        2'b11: result = uimm_w; // U-type immediate (LUI, AUIPC)
+        2'b11: result = imm_w; // U-type immediate (LUI, AUIPC)
     endcase
 endmodule
 
 module controller (
     input [6:0] opcode, input [2:0] funct3, input funct75, // funct7[5]
     output nbranch, branch, jump, alusrc, regwrite, memwrite,
-    output [1:0] resultsrc, immsrc,
-    output [2:0] aluctl
+    output [1:0] resultsrc,
+    output [2:0] immsrc,
+    output [2:0] aluctl,
+    output is_auipc
 );
-    reg [12:0] controls;
-    assign {aluctl, immsrc, resultsrc, alusrc, regwrite, memwrite, branch, jump, nbranch} = controls;
+    reg [14:0] controls;
+    assign {aluctl, immsrc, resultsrc, alusrc, regwrite, memwrite, branch, jump, nbranch, is_auipc} = controls;
 
     always @(*) begin
         casez (opcode)
-            // aluctl_immsrc_resultsrc_alusrc_regwrite_memwrite_branch_jump_nbranch
-            7'b0000011: controls = 13'b000_00_01_1_1_0_0_0_0; // lw
-            7'b0100011: controls = 13'b000_01_00_1_0_1_0_0_0; // sw
-            7'b1100011: controls = {12'b001_10_00_0_0_0_1_0, funct3[0]}; // beq, bne
-            7'b1101111: controls = 13'b000_11_10_0_1_0_0_1_0; // jal
-            7'b0110111: controls = 13'b000_xx_11_0_1_0_0_0_0; // lui
+            // aluctl_immsrc_resultsrc_alusrc_regwrite_memwrite_branch_jump_nbranch_isauipc
+            7'b0000011: controls = 15'b000_000_01_1_1_0_0_0_0_0; // lw
+            7'b0100011: controls = 15'b000_001_00_1_0_1_0_0_0_0; // sw
+            7'b1100011: controls = {13'b001_010_00_0_0_0_1_0, funct3[0], 1'b0}; // beq, bne
+            7'b1101111: controls = 15'b000_011_10_0_1_0_0_1_0_0; // jal
+            7'b0110111: controls = 15'b000_100_11_0_1_0_0_0_0_0; // lui
+            7'b0010111: controls = 15'b000_100_11_1_1_0_0_0_0_1; // auipc
             7'b0?10011: begin // R-type or I-type ALU
-                controls[9:0] = opcode[5] ? 10'bxx_00_0_1_0_0_0_0 : 10'b00_00_1_1_0_0_0_0;
+                controls[11:0] = opcode[5] ? 12'bxx_000_0_1_0_0_0_0_0 : 12'b00_000_1_1_0_0_0_0_0;
                 case (funct3)
-                    3'b000: controls[12:10] = (funct75 & opcode[5]) ? 3'b001 : 3'b000; // sub,add,addi
-                    3'b010: controls[12:10] = 3'b101; // slt, slti
-                    3'b110: controls[12:10] = 3'b011; // or, ori
-                    3'b111: controls[12:10] = 3'b010; // and, andi
-                    default: controls[12:10] = 3'bxxx; // unassigned alu controls
+                    3'b000: controls[14:12] = (funct75 & opcode[5]) ? 3'b001 : 3'b000; // sub,add,addi
+                    3'b010: controls[14:12] = 3'b101; // slt, slti
+                    3'b110: controls[14:12] = 3'b011; // or, ori
+                    3'b111: controls[14:12] = 3'b010; // and, andi
+                    default: controls[14:12] = 3'bxxx; // unassigned alu controls
                 endcase
             end
-            default: controls = 13'bxxx_xx_xx_x_x_x_x_x; // not implemented
+            default: controls = 15'bxxx_xx_xx_x_x_x_x_x; // not implemented
         endcase
     end
 endmodule
 
-module extend (input [31:7] instr, input [1:0] immsrc, output reg [31:0] immext);
+module extend (input [31:7] instr, input [2:0] immsrc, output reg [31:0] immext);
     always @(*)
         case (immsrc)
-            2'b00: immext = {{20{instr[31]}}, instr[31:20]}; // I-type
+            3'b000: immext = {{20{instr[31]}}, instr[31:20]}; // I-type
             // S-type: sw immextsrc = 01
-            2'b01: immext = {{20{instr[31]}}, instr[31:25], instr[11:7]}; // S-type
+            3'b001: immext = {{20{instr[31]}}, instr[31:25], instr[11:7]}; // S-type
             // B-type: beq immextsrc = 10
-            2'b10: immext = {{20{instr[31]}}, instr[7], instr[30:25], instr[11:8], 1'b0}; // B-type
-            2'b11: immext = {{12{instr[31]}}, instr[19:12], instr[20], instr[30:21], 1'b0}; // J-type
+            3'b010: immext = {{20{instr[31]}}, instr[7], instr[30:25], instr[11:8], 1'b0}; // B-type
+            3'b011: immext = {{12{instr[31]}}, instr[19:12], instr[20], instr[30:21], 1'b0}; // J-type
+            3'b100: immext = {instr[31:12], 12'b0}; // U-type
         endcase
 endmodule
 
