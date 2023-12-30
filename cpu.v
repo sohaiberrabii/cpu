@@ -36,15 +36,15 @@ module cpu(
     wire [2:0] immsrc_d;
     wire [1:0] resultsrc_d;
     wire alusrc_d, regwrite_d, memwrite_d, nbranch_d, branch_d, jump_d;
-    wire [14:0] controls_d;
-    wire is_auipc_d;
+    wire [15:0] controls_d;
+    wire is_auipc_d, is_jalr_d;
     assign controls_d = {
         regwrite_d, resultsrc_d, memwrite_d, nbranch_d, branch_d,
-        jump_d, aluctl_d, alusrc_d, is_auipc_d, immsrc_d
+        jump_d, aluctl_d, alusrc_d, is_auipc_d, is_jalr_d, immsrc_d
     };
 
     // Execute stage signals
-    wire is_auipc_e;
+    wire is_auipc_e, is_jalr_e;
     reg [31:0] rs1d_e, rs2d_e;
     reg [4:0] rs1_e, rs2_e, rd_e;
     reg [31:0] pcplus4_e, pc_e, immext_e;
@@ -52,10 +52,10 @@ module cpu(
     wire [2:0] aluctl_e;
     wire [1:0] resultsrc_e;
     wire zero_e, alusrc_e, regwrite_e, memwrite_e, nbranch_e, branch_e, jump_e, pcsrc_e;
-    reg [11:0] controls_e;
+    reg [12:0] controls_e;
     assign {
         regwrite_e, resultsrc_e, memwrite_e, nbranch_e, branch_e, jump_e, aluctl_e, alusrc_e,
-        is_auipc_e
+        is_auipc_e, is_jalr_e
     } = controls_e;
 
     // Writeback stage signals
@@ -105,8 +105,8 @@ module cpu(
     execute execute(
         .src1(src1), .src2(src2),
         .pc_e(pc_e), .immext_e(immext_e), .alusrc_e(alusrc_e), .aluctl_e(aluctl_e),
-        .zero(zero_e), .aluresult(aluresult_e), .pctarget(pctarget_e), .is_auipc(is_auipc_e)
-
+        .zero(zero_e), .aluresult(aluresult_e), .pctarget(pctarget_e), .is_auipc(is_auipc_e),
+        .is_jalr(is_jalr_e)
     );
 
     writeback writeback (
@@ -119,7 +119,7 @@ module cpu(
         .opcode(instr_d[6:0]), .funct3(instr_d[14:12]), .funct75(instr_d[30]),
         .alusrc(alusrc_d), .immsrc(immsrc_d), .resultsrc(resultsrc_d),
         .branch(branch_d), .jump(jump_d), .memwrite(memwrite_d), .regwrite(regwrite_d),
-        .aluctl(aluctl_d), .nbranch(nbranch_d), .is_auipc(is_auipc_d)
+        .aluctl(aluctl_d), .nbranch(nbranch_d), .is_auipc(is_auipc_d), .is_jalr(is_jalr_d)
     );
 
     hazard hzd (
@@ -155,12 +155,12 @@ module cpu(
                         rs1d_d, rs2d_d, instr_d[19:15], instr_d[24:20], instr_d[11:7],
                         pcplus4_d, pc_d, immext_d
                 };
-                controls_e <= controls_d[14:3];
+                controls_e <= controls_d[15:3];
             end
 
             {rd_m, pcplus4_m, wdata_m, aluresult_m, immext_m} <= {rd_e, pcplus4_e, src2, aluresult_e, immext_e};
             {rd_w, pcplus4_w, aluresult_w, immext_w} <= {rd_m, pcplus4_m, aluresult_m, immext_m};
-            {controls_m, controls_w} <= {controls_e[11:8], controls_m[3:1]};
+            {controls_m, controls_w} <= {controls_e[12:9], controls_m[3:1]};
         end
     end
 endmodule
@@ -218,7 +218,7 @@ module fetch(
         else if (ce)
         // else if(ce & clkdiv_pulse)
             // 'if' not equivalent to ternary op with 'x valued signals (cf. IEEE-1364-2005).
-            if (pcsrc_e) pc <= pctarget_e; else pc <= pcplus4;
+            if (pcsrc_e) pc <= {pctarget_e[31:1], 1'b0}; else pc <= pcplus4;
     end
 endmodule
 
@@ -247,9 +247,11 @@ module execute (
     output zero,
     output [31:0] aluresult,
     output [31:0] pctarget,
-    input is_auipc
+    input is_auipc, is_jalr
 );
-    assign pctarget = pc_e + immext_e;
+    wire [31:0] jumpsrc = is_jalr ? src1 : pc_e;
+    assign pctarget = jumpsrc + immext_e;
+
     alu alu (
         .a(is_auipc ? pc_e : src1), .b(alusrc_e ? immext_e : src2),
         .ctl(aluctl_e), .res(aluresult), .zero(zero)
@@ -275,18 +277,23 @@ module controller (
     output [1:0] resultsrc,
     output [2:0] immsrc,
     output [2:0] aluctl,
-    output is_auipc
+    output is_auipc, is_jalr
 );
     reg [14:0] controls;
     assign {aluctl, immsrc, resultsrc, alusrc, regwrite, memwrite, branch, jump, nbranch, is_auipc} = controls;
 
+    // TODO: handle is_auipc, nbranch similarly
+    assign is_jalr = jump & ~opcode[3];
+
     always @(*) begin
         casez (opcode)
+            // TODO: rework this, similar instructions should have separate handling
             // aluctl_immsrc_resultsrc_alusrc_regwrite_memwrite_branch_jump_nbranch_isauipc
             7'b0000011: controls = 15'b000_000_01_1_1_0_0_0_0_0; // lw
             7'b0100011: controls = 15'b000_001_00_1_0_1_0_0_0_0; // sw
             7'b1100011: controls = {13'b001_010_00_0_0_0_1_0, funct3[0], 1'b0}; // beq, bne
             7'b1101111: controls = 15'b000_011_10_0_1_0_0_1_0_0; // jal
+            7'b1100111: controls = 15'b000_000_10_0_1_0_0_1_0_0; // jalr
             7'b0110111: controls = 15'b000_100_11_0_1_0_0_0_0_0; // lui
             7'b0010111: controls = 15'b000_100_00_1_1_0_0_0_0_1; // auipc
             7'b0?10011: begin // R-type or I-type ALU

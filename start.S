@@ -12,7 +12,7 @@ start:
     TEST_CASE(3, x1, 0xabcde000, lui x1, 0xabcde)
     TEST_CASE(4, x0, 0, lui x0, 0x10000)
 
-    // auipc
+    /* // auipc */
     TEST_CASE(5, a0, 10000,
       lla a0, 1f + 10000; \
       jal a1, 1f; \
@@ -67,9 +67,34 @@ test_next:
         addi x2, x2, 1; \
     )
 
+    // jalr
+    li  TESTNUM, 15
+    li  x31, 0
+    la  x2, target_3
+    linkaddr_3:
+      jalr x19, x2, 0
+      nop
+      nop
+      j fail
+    target_3:
+      la  x1, linkaddr_3
+      addi x1, x1, 4
+      bne x1, x19, fail
+
+    li  TESTNUM, 16
+    li  x31, 0
+    la  x3, target_4
+    linkaddr_4:
+      jalr x0, x3, 0
+      nop
+      j fail
+    target_4:
+      bne x31, x0, fail
+
+
+    // tests passed
     li x2, 0x20004
     sw zero, 0(x2)
-
 // infinite loop
 pass: beq x2, x2, pass
 
