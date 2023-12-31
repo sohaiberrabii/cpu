@@ -12,3 +12,15 @@
       li  x2, val2; \
       inst x3, x1, x2; \
     )
+
+#define TEST_BR_TAKEN(testnum, inst, val1, val2 ) \
+    li  TESTNUM, testnum; \
+    li  x1, val1; \
+    li  x2, val2; \
+    inst x1, x2, 2f; \
+    bne x0, TESTNUM, fail; \
+1:  bne x0, TESTNUM, 3f; \
+2:  inst x1, x2, 1b; \
+    bne x0, TESTNUM, fail; \
+3:
+

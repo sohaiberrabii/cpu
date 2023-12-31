@@ -31,6 +31,7 @@ start:
     TEST_RR(10, add, 0x0abcde00, 0x80000000, 0x8abcde00)
 
     // jump tests
+    // ====================
 
     // j
     li TESTNUM, 11
@@ -91,6 +92,27 @@ test_next:
     target_4:
       bne x31, x0, fail
 
+    // taken branch tests
+    // ===================
+
+    // beq
+    TEST_BR_TAKEN(17, beq,  0,  0);
+    TEST_BR_TAKEN(18, beq,  1,  1);
+    TEST_BR_TAKEN(19, beq, -1, -1);
+
+    // bne
+    TEST_BR_TAKEN(17, bne,  0,  1);
+    TEST_BR_TAKEN(18, bne,  1,  0);
+    TEST_BR_TAKEN(19, bne, -1,  1);
+    TEST_BR_TAKEN(20, bne,  1, -1);
+
+    // bge
+    TEST_BR_TAKEN(21, bge,  0,  0);
+    TEST_BR_TAKEN(22, bge,  1,  1);
+    TEST_BR_TAKEN(23, bge, -1, -1);
+    TEST_BR_TAKEN(24, bge,  1,  0);
+    TEST_BR_TAKEN(25, bge,  1, -1);
+    TEST_BR_TAKEN(26, bge, -1, -2);
 
     // tests passed
     li x2, 0x20004
