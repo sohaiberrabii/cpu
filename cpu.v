@@ -84,15 +84,7 @@ module cpu(
                 pc_f <= {pctarget_e[31:1], 1'b0};
             else
                 pc_f <= pcplus4_f;
-        // else
-        //     pc_f <= pc_f;
     end
-
-    // fetch fetch (
-    //     .clk(clk), .ce(~stallf), .reset(reset), .pcsrc_e(pcsrc_e),
-    //     .pctarget_e({pctarget_e[31:1], 1'b0}),
-    //     .pcplus4(pcplus4_f), .pc(pc_f)
-    // );
 
     // register file
     reg [31:0] rf[31:0];
@@ -228,26 +220,6 @@ module hazard (
     assign flushe = pcsrc_e | lwstall;
 endmodule
 
-module fetch(
-    input clk, ce, reset,
-    input pcsrc_e,
-    input [31:0] pctarget_e,
-    input [31:0] pcplus4,
-    output reg [31:0] pc
-);
-    always @(posedge clk) begin
-        if (reset)
-            pc <= 0;
-        else if (ce)
-            if (pcsrc_e)
-                pc <= pctarget_e;
-            else
-                pc <= pcplus4;
-    end
-endmodule
-
-// TODO: create a well tested abstraction for the ISA. opcode => inst
-// Need an parser of https://github.com/riscv/riscv-opcodes
 module controller (
     input [6:0] opcode, input [2:0] funct3, input funct75, // funct7[5]
     output nbranch, branch, jump, alusrc, regwrite, memwrite,
