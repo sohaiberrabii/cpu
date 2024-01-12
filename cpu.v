@@ -26,7 +26,8 @@ module cpu(
     assign pc = pc_f;
 
     // Fetch stage signals
-    wire [31:0] instr_f, pcplus4_f, pc_f;
+    wire [31:0] instr_f, pcplus4_f;
+    reg [31:0] pc_f;
     assign instr_f = instr;
 
     // Decode stage signals
@@ -71,19 +72,37 @@ module cpu(
     wire [1:0] forward1, forward2;
     wire flushd, flushe, stallf, stalld, forward_d;
 
+    // Fetch
     assign pcsrc_e = (nbranch_e ? ~zero_e : zero_e) & branch_e | jump_e;
-    fetch fetch (
-        .clk(clk), .ce(~stallf), .reset(reset), .pcsrc_e(pcsrc_e),
-        .pctarget_e(pctarget_e),
-        .pcplus4(pcplus4_f), .pc(pc_f)
-    );
+    assign pcplus4_f = pc_f + 4;
 
-    decode decode (
-        .clk(clk), .instr_d(instr_d),
-        .regwrite_w(regwrite_w), .result_w(result_w),
-        .rd_w(rd_w), .immsrc_d(immsrc_d),
-        .rs1d(rs1d_d), .rs2d(rs2d_d), .immext(immext_d)
-    );
+    always @(posedge clk) begin
+        if (reset)
+            pc_f <= 0;
+        else if (~stallf)
+            if (pcsrc_e)
+                pc_f <= {pctarget_e[31:1], 1'b0};
+            else
+                pc_f <= pcplus4_f;
+        // else
+        //     pc_f <= pc_f;
+    end
+
+    // fetch fetch (
+    //     .clk(clk), .ce(~stallf), .reset(reset), .pcsrc_e(pcsrc_e),
+    //     .pctarget_e({pctarget_e[31:1], 1'b0}),
+    //     .pcplus4(pcplus4_f), .pc(pc_f)
+    // );
+
+    // register file
+    reg [31:0] rf[31:0];
+
+    // source registers
+    assign rs1d_d = (instr_d[19:15] != 0) ? rf[instr_d[19:15]] : 0;
+    assign rs2d_d = (instr_d[24:20] != 0) ? rf[instr_d[24:20]] : 0;
+
+    // decode immediate
+    extend ext (.instr(instr_d[31:7]), .immsrc(immsrc_d), .immext(immext_d));
 
     // forward logic
     reg [31:0] src1, src2;
@@ -117,6 +136,8 @@ module cpu(
         2'b10: result_w = pcplus4_w;
         2'b11: result_w = immext_w; // LUI
     endcase
+    always @(negedge clk)
+        if (regwrite_w) rf[rd_w] <= result_w;
 
     controller ctl (
         .opcode(instr_d[6:0]), .funct3(instr_d[14:12]), .funct75(instr_d[30]),
@@ -135,7 +156,7 @@ module cpu(
     );
 
     // datapath signals
-    always @(posedge clk, posedge reset) begin
+    always @(posedge clk) begin
         // flush all signals from pipeline at reset
         // TODO: this is disgusting and not actually needed? isn't it enough to deassert memwrite/regwrite
         if (reset) begin
@@ -211,35 +232,18 @@ module fetch(
     input clk, ce, reset,
     input pcsrc_e,
     input [31:0] pctarget_e,
-    output [31:0] pcplus4,
+    input [31:0] pcplus4,
     output reg [31:0] pc
 );
-    assign pcplus4 = pc + 4;
     always @(posedge clk) begin
         if (reset)
             pc <= 0;
         else if (ce)
-        // else if(ce & clkdiv_pulse)
-            // 'if' not equivalent to ternary op with 'x valued signals (cf. IEEE-1364-2005).
-            if (pcsrc_e) pc <= {pctarget_e[31:1], 1'b0}; else pc <= pcplus4;
+            if (pcsrc_e)
+                pc <= pctarget_e;
+            else
+                pc <= pcplus4;
     end
-endmodule
-
-module decode (
-    input clk,
-    input [31:0] instr_d,
-    input regwrite_w,
-    input [31:0] result_w,
-    input [4:0] rd_w,
-    input [2:0] immsrc_d,
-    output [31:0] rs1d, rs2d, immext
-);
-    register_file reg_file (
-        .clk(clk), .we3(regwrite_w),
-        .addr1(instr_d[19:15]), .addr2(instr_d[24:20]), .addr3(rd_w),
-        .rd1(rs1d), .rd2(rs2d), .wd3(result_w)
-    );
-    extend ext (.instr(instr_d[31:7]), .immsrc(immsrc_d), .immext(immext));
 endmodule
 
 // TODO: create a well tested abstraction for the ISA. opcode => inst
@@ -322,18 +326,4 @@ module alu (input [31:0] a, b, input [2:0] ctl, output reg [31:0] res, output ze
     end
 
     assign zero = res == 32'b0;
-endmodule
-
-module register_file (
-    input clk, we3,
-    input [4:0] addr1, addr2, addr3,
-    input [31:0] wd3,
-    output [31:0] rd1, rd2
-);
-    reg [31:0] rf[31:0];
-    always @(negedge clk)
-        if (we3) rf[addr3] <= wd3;
-
-    assign rd1 = (addr1 != 0) ? rf[addr1] : 0;
-    assign rd2 = (addr2 != 0) ? rf[addr2] : 0;
 endmodule
