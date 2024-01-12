@@ -12,6 +12,7 @@ module icebreaker #(parameter integer MEMWORDS = 32768) (
     // instruction memory
     wire [31:0] pc;
     reg [31:0] imem[0:MEMWORDS];
+    initial $readmemh("firmware.hex", imem);
     wire [31:0] instr = imem[pc[31:2]];
 
     // spram as data memory
@@ -55,7 +56,7 @@ module icebreaker #(parameter integer MEMWORDS = 32768) (
     );
 
     wire [31:0] io_rdata = mem_addr[UART_CNTL_BIT] ? { 22'b0, !uart_ready, 9'b0} : 32'b0;
-    wire [31:0] mem_rdata = isRAM ? ram_rdata : io_rdata ;
+    wire [31:0] mem_rdata = isRAM ? ram_rdata : io_rdata;
 
     cpu core (
         .clk(CLK), .reset(~BTN_N),
@@ -63,24 +64,25 @@ module icebreaker #(parameter integer MEMWORDS = 32768) (
         .mem_write(mem_write), .mem_addr(mem_addr),
         .mem_rdata(mem_rdata), .mem_wdata(mem_wdata)
     );
-	// assign { P1A10, P1A9, P1A8, P1A7, P1A4, P1A3, P1A2, P1A1 } = sseg1;
-	// assign { P1B10, P1B9, P1B8, P1B7, P1B4, P1B3, P1B2, P1B1 } = sseg2;
 
-    // wire [7:0] sseg1, sseg2;
+	assign { P1A10, P1A9, P1A8, P1A7, P1A4, P1A3, P1A2, P1A1 } = sseg1;
+	assign { P1B10, P1B9, P1B8, P1B7, P1B4, P1B3, P1B2, P1B1 } = sseg2;
+
+    wire [7:0] sseg1, sseg2;
 
 	// Assign 7 segment control line bus to Pmod pins
 
 	// 7 segment display control
-	// seven_seg_ctrl sseg_ctrl1 (
-	// 	.CLK(CLK),
-	// 	.din(ioregs[7:0]),
-        // .dout(sseg1)
-	// );
-	// seven_seg_ctrl sseg_ctrl2 (
-	// 	.CLK(CLK),
-	// 	.din(pc[15:8]),
-	// 	.dout(sseg2)
-	// );
+	seven_seg_ctrl sseg_ctrl1 (
+		.CLK(CLK),
+		.din(pc[7:0]),
+        .dout(sseg1)
+	);
+	seven_seg_ctrl sseg_ctrl2 (
+		.CLK(CLK),
+		.din(pc[15:8]),
+		.dout(sseg2)
+	);
 endmodule
 
 // Seven segment controller

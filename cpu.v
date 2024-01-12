@@ -61,7 +61,7 @@ module cpu(
     // Writeback stage signals
     reg [4:0] rd_w;
     reg [31:0] aluresult_w, pcplus4_w, immext_w;
-    wire [31:0] result_w;
+    reg [31:0] result_w;
     wire regwrite_w;
     wire [1:0] resultsrc_w;
     reg [2:0] controls_w;
@@ -102,18 +102,21 @@ module cpu(
         endcase
     end
 
-    execute execute(
-        .src1(src1), .src2(src2),
-        .pc_e(pc_e), .immext_e(immext_e), .alusrc_e(alusrc_e), .aluctl_e(aluctl_e),
-        .zero(zero_e), .aluresult(aluresult_e), .pctarget(pctarget_e), .is_auipc(is_auipc_e),
-        .is_jalr(is_jalr_e)
+    // Execute
+    wire [31:0] jumpsrc = is_jalr_e ? src1 : pc_e;
+    assign pctarget_e = jumpsrc + immext_e;
+    alu alu (
+        .a(is_auipc_e ? pc_e : src1), .b(alusrc_e ? immext_e : src2),
+        .ctl(aluctl_e), .res(aluresult_e), .zero(zero_e)
     );
 
-    writeback writeback (
-        .resultsrc_w(resultsrc_w),
-        .aluresult_w(aluresult_w), .pcplus4_w(pcplus4_w), .rdata_w(rdata_w),
-        .result(result_w), .imm_w(immext_w)
-    );
+    // Writeback
+    always @(*) case(resultsrc_w)
+        2'b00: result_w = aluresult_w;
+        2'b01: result_w = rdata_w;
+        2'b10: result_w = pcplus4_w;
+        2'b11: result_w = immext_w; // LUI
+    endcase
 
     controller ctl (
         .opcode(instr_d[6:0]), .funct3(instr_d[14:12]), .funct75(instr_d[30]),
@@ -239,38 +242,8 @@ module decode (
     extend ext (.instr(instr_d[31:7]), .immsrc(immsrc_d), .immext(immext));
 endmodule
 
-module execute (
-    input [31:0] src1, src2,
-    input [31:0] pc_e, immext_e,
-    input alusrc_e,
-    input [2:0] aluctl_e,
-    output zero,
-    output [31:0] aluresult,
-    output [31:0] pctarget,
-    input is_auipc, is_jalr
-);
-    wire [31:0] jumpsrc = is_jalr ? src1 : pc_e;
-    assign pctarget = jumpsrc + immext_e;
-
-    alu alu (
-        .a(is_auipc ? pc_e : src1), .b(alusrc_e ? immext_e : src2),
-        .ctl(aluctl_e), .res(aluresult), .zero(zero)
-    );
-endmodule
-
-module writeback (
-    input [1:0] resultsrc_w,
-    input [31:0] aluresult_w, pcplus4_w, rdata_w, imm_w,
-    output reg [31:0] result
-);
-    always @(*) case(resultsrc_w)
-        2'b00: result = aluresult_w;
-        2'b01: result = rdata_w;
-        2'b10: result = pcplus4_w;
-        2'b11: result = imm_w; // LUI
-    endcase
-endmodule
-
+// TODO: create a well tested abstraction for the ISA. opcode => inst
+// Need an parser of https://github.com/riscv/riscv-opcodes
 module controller (
     input [6:0] opcode, input [2:0] funct3, input funct75, // funct7[5]
     output nbranch, branch, jump, alusrc, regwrite, memwrite,
@@ -287,7 +260,6 @@ module controller (
 
     always @(*) begin
         casez (opcode)
-            // TODO: rework this, similar instructions should have separate handling
             // aluctl_immsrc_resultsrc_alusrc_regwrite_memwrite_branch_jump_nbranch_isauipc
             7'b0000011: controls = 15'b000_000_01_1_1_0_0_0_0_0; // lw
             7'b0100011: controls = 15'b000_001_00_1_0_1_0_0_0_0; // sw
