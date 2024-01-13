@@ -49,15 +49,18 @@ module cpu(
     reg [31:0] rs1d_e, rs2d_e;
     reg [4:0] rs1_e, rs2_e, rd_e;
     reg [31:0] pcplus4_e, pc_e, immext_e;
-    wire [31:0] aluresult_e, pctarget_e;
+    wire [31:0] pctarget_e;
     wire [2:0] aluctl_e;
     wire [1:0] resultsrc_e;
-    wire zero_e, alusrc_e, regwrite_e, memwrite_e, nbranch_e, branch_e, jump_e, pcsrc_e;
+    wire alusrc_e, regwrite_e, memwrite_e, nbranch_e, branch_e, jump_e, pcsrc_e;
     reg [12:0] controls_e;
     assign {
         regwrite_e, resultsrc_e, memwrite_e, nbranch_e, branch_e, jump_e, aluctl_e, alusrc_e,
         is_auipc_e, is_jalr_e
     } = controls_e;
+    reg [31:0] aluresult_e;
+    wire lt_e = aluresult_e[0]; // aluctl => less than
+    wire zero_e = aluresult_e == 0; // aluctl => sub
 
     // Writeback stage signals
     reg [4:0] rd_w;
@@ -116,10 +119,23 @@ module cpu(
     // Execute
     wire [31:0] jumpsrc = is_jalr_e ? src1 : pc_e;
     assign pctarget_e = jumpsrc + immext_e;
-    alu alu (
-        .a(is_auipc_e ? pc_e : src1), .b(alusrc_e ? immext_e : src2),
-        .ctl(aluctl_e), .res(aluresult_e), .zero(zero_e)
-    );
+
+    wire [31:0] a = is_auipc_e ? pc_e : src1;
+    wire [31:0] b = alusrc_e ? immext_e : src2;
+    wire [31:0] condnotb = aluctl_e[0] ? ~b : b;
+    wire [31:0] add_sub = a + condnotb + aluctl_e[0]; // 2s comp
+    always @(*) begin
+        casez (aluctl_e)
+            3'b00?: aluresult_e = add_sub;
+            3'b010: aluresult_e = a & b;
+            3'b011: aluresult_e = a | b;
+            3'b100: aluresult_e = a ^ b;
+            3'b101: aluresult_e = $signed(a) < $signed(b);
+            3'b110: aluresult_e = a << b[4:0];
+            3'b111: aluresult_e = a >> b[4:0];
+            default: aluresult_e = 32'bx;
+        endcase
+    end
 
     // Writeback
     always @(*) case(resultsrc_w)
@@ -270,32 +286,4 @@ module extend (input [31:7] instr, input [2:0] immsrc, output reg [31:0] immext)
             3'b011: immext = {{12{instr[31]}}, instr[19:12], instr[20], instr[30:21], 1'b0}; // J-type
             3'b100: immext = {instr[31:12], 12'b0}; // U-type
         endcase
-endmodule
-
-module alu (input [31:0] a, b, input [2:0] ctl, output reg [31:0] res, output zero);
-    wire [31:0] condnotb = ctl[0] ? ~b : b;
-    wire [31:0] sum = a + condnotb + ctl[0]; // 2s comp
-
-    // TODO: check if abc can optimize this
-    // isadd: 000, issub: 001 or 101
-    wire isadd = ~ctl[0] & ~ctl[1] & ~ctl[2];
-    wire issub = ctl[0] & ~ctl[1];
-    wire ovf = ~(a[31] ^ b[31]) & (a[31] ^ sum[31]) & isadd |
-                (a[31] ^ b[31]) & (a[31] ^ sum[31]) & issub;
-
-    // TODO: optimize shifters to reduce lut count
-    always @(*) begin
-        casez (ctl)
-            3'b00?: res = sum;
-            3'b010: res = a & b;
-            3'b011: res = a | b;
-            3'b100: res = a ^ b;
-            3'b101: res = sum[31] ^ ovf; // a-b<0 + no ovf or ovf negative side (a<0, b>0)
-            3'b110: res = a << b[4:0];
-            3'b111: res = a >> b[4:0];
-            default: res = 32'bx;
-        endcase
-    end
-
-    assign zero = res == 32'b0;
 endmodule
