@@ -9,6 +9,9 @@ module cpu(
     input  [31:0] instr,        // instruction data
     output [31:0] pc            // program counter for external instruction memory
 );
+    // register file
+    reg [31:0] rf[31:0];
+
     // Memory stage signals
     reg [4:0] rd_m;
     reg [31:0] aluresult_m, pcplus4_m, wdata_m, immext_m;
@@ -32,16 +35,14 @@ module cpu(
 
     // Decode stage signals
     reg [31:0] instr_d, pcplus4_d, pc_d;
-    wire [31:0] rs1d_d, rs2d_d, immext_d;
     wire [2:0] aluctl_d;
-    wire [2:0] immsrc_d;
     wire [1:0] resultsrc_d;
     wire alusrc_d, regwrite_d, memwrite_d, nbranch_d, branch_d, jump_d;
-    wire [15:0] controls_d;
+    wire [12:0] controls_d;
     wire is_auipc_d, is_jalr_d;
     assign controls_d = {
         regwrite_d, resultsrc_d, memwrite_d, nbranch_d, branch_d,
-        jump_d, aluctl_d, alusrc_d, is_auipc_d, is_jalr_d, immsrc_d
+        jump_d, aluctl_d, alusrc_d, is_auipc_d, is_jalr_d
     };
 
     // Execute stage signals
@@ -89,15 +90,101 @@ module cpu(
                 pc_f <= pcplus4_f;
     end
 
-    // register file
-    reg [31:0] rf[31:0];
+    // Decode
+    always @(posedge clk) begin
+        if (reset | flushd)
+            {instr_d, pc_d, pcplus4_d} <= 0;
+        else if (~stalld)
+            {instr_d, pc_d, pcplus4_d} <= {instr_f, pc_f, pcplus4_f};
+    end
 
-    // source registers
-    assign rs1d_d = (instr_d[19:15] != 0) ? rf[instr_d[19:15]] : 0;
-    assign rs2d_d = (instr_d[24:20] != 0) ? rf[instr_d[24:20]] : 0;
+    controller ctl (
+        .opcode(instr_d[6:0]), .funct3(instr_d[14:12]), .funct75(instr_d[30]),
+        .alusrc(alusrc_d), .resultsrc(resultsrc_d),
+        .branch(branch_d), .jump(jump_d), .memwrite(memwrite_d), .regwrite(regwrite_d),
+        .aluctl(aluctl_d), .nbranch(nbranch_d), .is_auipc(is_auipc_d), .is_jalr(is_jalr_d)
+    );
 
-    // decode immediate
-    extend ext (.instr(instr_d[31:7]), .immsrc(immsrc_d), .immext(immext_d));
+    wire instr_lui   = instr_d[6:0] == 7'b0110111;
+    wire instr_auipc = instr_d[6:0] == 7'b0010111;
+    wire instr_jal   = instr_d[6:0] == 7'b1101111;
+    wire instr_jalr  = instr_d[6:0] == 7'b1100111 && instr_d[14:12] == 3'b000;
+
+    wire is_beq_bne_blt_bge_bltu_bgeu = instr_d[6:0] == 7'b1100011;
+    wire instr_beq   = is_beq_bne_blt_bge_bltu_bgeu && instr_d[14:12] == 3'b000;
+    wire instr_bne   = is_beq_bne_blt_bge_bltu_bgeu && instr_d[14:12] == 3'b001;
+    wire instr_blt   = is_beq_bne_blt_bge_bltu_bgeu && instr_d[14:12] == 3'b100;
+    wire instr_bge   = is_beq_bne_blt_bge_bltu_bgeu && instr_d[14:12] == 3'b101;
+    wire instr_bltu  = is_beq_bne_blt_bge_bltu_bgeu && instr_d[14:12] == 3'b110;
+    wire instr_bgeu  = is_beq_bne_blt_bge_bltu_bgeu && instr_d[14:12] == 3'b111;
+
+    wire is_lb_lh_lw_lbu_lhu    = instr_d[6:0] == 7'b0000011;
+    wire instr_lb    = is_lb_lh_lw_lbu_lhu && instr_d[14:12] == 3'b000;
+    wire instr_lh    = is_lb_lh_lw_lbu_lhu && instr_d[14:12] == 3'b001;
+    wire instr_lw    = is_lb_lh_lw_lbu_lhu && instr_d[14:12] == 3'b010;
+    wire instr_lbu   = is_lb_lh_lw_lbu_lhu && instr_d[14:12] == 3'b100;
+    wire instr_lhu   = is_lb_lh_lw_lbu_lhu && instr_d[14:12] == 3'b101;
+
+    wire is_sb_sh_sw    = instr_d[6:0] == 7'b0100011;
+    wire instr_sb    = is_sb_sh_sw && instr_d[14:12] == 3'b000;
+    wire instr_sh    = is_sb_sh_sw && instr_d[14:12] == 3'b001;
+    wire instr_sw    = is_sb_sh_sw && instr_d[14:12] == 3'b010;
+
+    wire is_alu_reg_imm = instr_d[6:0] == 7'b0010011;
+    wire instr_addi  = is_alu_reg_imm && instr_d[14:12] == 3'b000;
+    wire instr_slti  = is_alu_reg_imm && instr_d[14:12] == 3'b010;
+    wire instr_sltiu = is_alu_reg_imm && instr_d[14:12] == 3'b011;
+    wire instr_xori  = is_alu_reg_imm && instr_d[14:12] == 3'b100;
+    wire instr_ori   = is_alu_reg_imm && instr_d[14:12] == 3'b110;
+    wire instr_andi  = is_alu_reg_imm && instr_d[14:12] == 3'b111;
+
+    wire instr_slli  = is_alu_reg_imm && instr_d[14:12] == 3'b001 && instr_d[31:25] == 7'b0000000;
+    wire instr_srli  = is_alu_reg_imm && instr_d[14:12] == 3'b101 && instr_d[31:25] == 7'b0000000;
+    wire instr_srai  = is_alu_reg_imm && instr_d[14:12] == 3'b101 && instr_d[31:25] == 7'b0100000;
+    wire is_slli_srli_srai = |{instr_slli, instr_srli, instr_srai};
+
+    wire is_alu_reg_reg = instr_d[6:0] == 7'b0110011;
+    wire instr_add   = is_alu_reg_reg && instr_d[14:12] == 3'b000 && instr_d[31:25] == 7'b0000000;
+    wire instr_sub   = is_alu_reg_reg && instr_d[14:12] == 3'b000 && instr_d[31:25] == 7'b0100000;
+    wire instr_sll   = is_alu_reg_reg && instr_d[14:12] == 3'b001 && instr_d[31:25] == 7'b0000000;
+    wire instr_slt   = is_alu_reg_reg && instr_d[14:12] == 3'b010 && instr_d[31:25] == 7'b0000000;
+    wire instr_sltu  = is_alu_reg_reg && instr_d[14:12] == 3'b011 && instr_d[31:25] == 7'b0000000;
+    wire instr_xor   = is_alu_reg_reg && instr_d[14:12] == 3'b100 && instr_d[31:25] == 7'b0000000;
+    wire instr_srl   = is_alu_reg_reg && instr_d[14:12] == 3'b101 && instr_d[31:25] == 7'b0000000;
+    wire instr_sra   = is_alu_reg_reg && instr_d[14:12] == 3'b101 && instr_d[31:25] == 7'b0100000;
+    wire instr_or    = is_alu_reg_reg && instr_d[14:12] == 3'b110 && instr_d[31:25] == 7'b0000000;
+    wire instr_and   = is_alu_reg_reg && instr_d[14:12] == 3'b111 && instr_d[31:25] == 7'b0000000;
+
+    wire is_i_type = |{instr_jalr, is_lb_lh_lw_lbu_lhu, is_alu_reg_imm} && !is_slli_srli_srai;
+    wire is_s_type = is_sb_sh_sw;
+    wire is_b_type = is_beq_bne_blt_bge_bltu_bgeu;
+    wire is_u_type = instr_lui || instr_auipc;
+    wire is_j_type = instr_jal;
+
+    // decode to execute
+    always @(posedge clk) begin
+        if (reset | flushe)
+            {rs1d_e, rs2d_e, rs1_e, immext_e, rd_e} <= 0;
+        else begin
+            // register operands
+            rs1_e <= instr_d[19:15];
+            rs2_e <= instr_d[24:20];
+            rs1d_e <= (instr_d[19:15] != 0) ? rf[instr_d[19:15]] : 0;
+            rs2d_e <= (instr_d[24:20] != 0) ? rf[instr_d[24:20]] : 0;
+            rd_e <= instr_d[11:7];
+
+            // immediate
+            (* parallel_case *)
+            case (1'b1)
+                is_i_type: immext_e <= {{20{instr_d[31]}}, instr_d[31:20]};
+                is_s_type: immext_e <= {{20{instr_d[31]}}, instr_d[31:25], instr_d[11:7]};
+                is_b_type: immext_e <= {{20{instr_d[31]}}, instr_d[7], instr_d[30:25], instr_d[11:8], 1'b0};
+                is_j_type: immext_e <= {{12{instr_d[31]}}, instr_d[19:12], instr_d[20], instr_d[30:21], 1'b0};
+                is_u_type: immext_e <= {instr_d[31:12], 12'b0};
+                default: immext_e <= 32'bx;
+            endcase
+        end
+    end
 
     // forward logic
     reg [31:0] src1, src2;
@@ -147,13 +234,6 @@ module cpu(
     always @(negedge clk)
         if (regwrite_w) rf[rd_w] <= result_w;
 
-    controller ctl (
-        .opcode(instr_d[6:0]), .funct3(instr_d[14:12]), .funct75(instr_d[30]),
-        .alusrc(alusrc_d), .immsrc(immsrc_d), .resultsrc(resultsrc_d),
-        .branch(branch_d), .jump(jump_d), .memwrite(memwrite_d), .regwrite(regwrite_d),
-        .aluctl(aluctl_d), .nbranch(nbranch_d), .is_auipc(is_auipc_d), .is_jalr(is_jalr_d)
-    );
-
     hazard hzd (
         .regwrite_m(regwrite_m), .regwrite_w(regwrite_w),
         .rs1_e(rs1_e), .rs2_e(rs2_e), .rd_m(rd_m), .rd_w(rd_w),
@@ -163,31 +243,20 @@ module cpu(
         .stallf(stallf), .stalld(stalld), .resultsrc_e(resultsrc_e), .resultsrc_m(resultsrc_m)
     );
 
-    // datapath signals
     always @(posedge clk) begin
         // flush all signals from pipeline at reset
         // TODO: this is disgusting and not actually needed? isn't it enough to deassert memwrite/regwrite
         if (reset) begin
-            {instr_d, pc_d, pcplus4_d} <= 0;
-            {rs1d_e, rs2d_e, rs1_e, rs2_e, rd_e, pcplus4_e, pc_e, immext_e} <= 0;
+            {pcplus4_e, pc_e} <= 0;
             {rd_m, pcplus4_m, wdata_m, aluresult_m, immext_m} <= 0;
             {rd_w, pcplus4_w, aluresult_w, immext_w} <= 0;
             {controls_e, controls_m, controls_w} <= 0;
         end else begin
-            if (flushd)
-                {instr_d, pc_d, pcplus4_d} <= 0;
-            else if (~stalld)
-                {instr_d, pc_d, pcplus4_d} <= {instr_f, pc_f, pcplus4_f};
-
             if (flushe)
-                {rs1d_e, rs2d_e, rs1_e, rs2_e, rd_e, pcplus4_e, pc_e, immext_e,
-                    controls_e} <= 0;
+                {pcplus4_e, pc_e, controls_e} <= 0;
             else begin
-                {rs1d_e, rs2d_e, rs1_e, rs2_e, rd_e, pcplus4_e, pc_e, immext_e} <= {
-                        rs1d_d, rs2d_d, instr_d[19:15], instr_d[24:20], instr_d[11:7],
-                        pcplus4_d, pc_d, immext_d
-                };
-                controls_e <= controls_d[15:3];
+                {pcplus4_e, pc_e} <= {pcplus4_d, pc_d};
+                controls_e <= controls_d;
             end
 
             {rd_m, pcplus4_m, wdata_m, aluresult_m, immext_m} <= {rd_e, pcplus4_e, src2, aluresult_e, immext_e};
@@ -240,50 +309,37 @@ module controller (
     input [6:0] opcode, input [2:0] funct3, input funct75, // funct7[5]
     output nbranch, branch, jump, alusrc, regwrite, memwrite,
     output [1:0] resultsrc,
-    output [2:0] immsrc,
     output [2:0] aluctl,
     output is_auipc, is_jalr
 );
-    reg [14:0] controls;
-    assign {aluctl, immsrc, resultsrc, alusrc, regwrite, memwrite, branch, jump, nbranch, is_auipc} = controls;
+    reg [11:0] controls;
+    assign {aluctl, resultsrc, alusrc, regwrite, memwrite, branch, jump, nbranch, is_auipc} = controls;
 
     // TODO: handle is_auipc, nbranch similarly
     assign is_jalr = jump & ~opcode[3];
 
     always @(*) begin
         casez (opcode)
-            // aluctl_immsrc_resultsrc_alusrc_regwrite_memwrite_branch_jump_nbranch_isauipc
-            7'b0000011: controls = 15'b000_000_01_1_1_0_0_0_0_0; // lw
-            7'b0100011: controls = 15'b000_001_00_1_0_1_0_0_0_0; // sw
-            7'b1100011: controls = {13'b001_010_00_0_0_0_1_0, funct3[0], 1'b0}; // beq, bne
-            7'b1101111: controls = 15'b000_011_10_0_1_0_0_1_0_0; // jal
-            7'b1100111: controls = 15'b000_000_10_0_1_0_0_1_0_0; // jalr
-            7'b0110111: controls = 15'b000_100_11_0_1_0_0_0_0_0; // lui
-            7'b0010111: controls = 15'b000_100_00_1_1_0_0_0_0_1; // auipc
+            // aluctl_resultsrc_alusrc_regwrite_memwrite_branch_jump_nbranch_isauipc
+            7'b0000011: controls = 12'b000_01_1_1_0_0_0_0_0; // lw
+            7'b0100011: controls = 12'b000_00_1_0_1_0_0_0_0; // sw
+            7'b1100011: controls = {10'b001_00_0_0_0_1_0, funct3[0], 1'b0}; // beq, bne
+            7'b1101111: controls = 12'b000_10_0_1_0_0_1_0_0; // jal
+            7'b1100111: controls = 12'b000_10_0_1_0_0_1_0_0; // jalr
+            7'b0110111: controls = 12'b000_11_0_1_0_0_0_0_0; // lui
+            7'b0010111: controls = 12'b000_00_1_1_0_0_0_0_1; // auipc
             7'b0?10011: begin // R-type or I-type ALU
-                controls[11:0] = opcode[5] ? 12'bxx_000_0_1_0_0_0_0_0 : 12'b00_000_1_1_0_0_0_0_0;
+                controls[8:0] = opcode[5] ? 9'bxx_0_1_0_0_0_0_0 : 9'b00_1_1_0_0_0_0_0;
                 case (funct3)
-                    3'b000: controls[14:12] = (funct75 & opcode[5]) ? 3'b001 : 3'b000; // sub,add,addi
-                    3'b010: controls[14:12] = 3'b101; // slt, slti
-                    3'b110: controls[14:12] = 3'b011; // or, ori
-                    3'b111: controls[14:12] = 3'b010; // and, andi
-                    default: controls[14:12] = 3'bxxx; // unassigned alu controls
+                    3'b000: controls[11:9] = (funct75 & opcode[5]) ? 3'b001 : 3'b000; // sub,add,addi
+                    3'b010: controls[11:9] = 3'b101; // slt, slti
+                    3'b110: controls[11:9] = 3'b011; // or, ori
+                    3'b111: controls[11:9] = 3'b010; // and, andi
+                    default: controls[11:9] = 3'bxxx; // unassigned alu controls
                 endcase
             end
-            default: controls = 15'bxxx_xx_xx_x_x_x_x_x; // not implemented
+            default: controls = 12'bx;
         endcase
     end
 endmodule
 
-module extend (input [31:7] instr, input [2:0] immsrc, output reg [31:0] immext);
-    always @(*)
-        case (immsrc)
-            3'b000: immext = {{20{instr[31]}}, instr[31:20]}; // I-type
-            // S-type: sw immextsrc = 01
-            3'b001: immext = {{20{instr[31]}}, instr[31:25], instr[11:7]}; // S-type
-            // B-type: beq immextsrc = 10
-            3'b010: immext = {{20{instr[31]}}, instr[7], instr[30:25], instr[11:8], 1'b0}; // B-type
-            3'b011: immext = {{12{instr[31]}}, instr[19:12], instr[20], instr[30:21], 1'b0}; // J-type
-            3'b100: immext = {instr[31:12], 12'b0}; // U-type
-        endcase
-endmodule
