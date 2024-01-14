@@ -29,13 +29,16 @@ cpu_syntb.vvp: cpu_tb.v synth.v
 synth.v: cpu.v
 	yosys -qv3 -l synth.log -p 'read_verilog $<; hierarchy -top cpu; synth; write_verilog $@'
 
+ibsynth.v: cpu.v
+	yosys -p 'synth_ice40 -device $(FAMILY) -top cpu; write_verilog $@' $^
+
 icebsim: icebreaker_tb.vcd
 
 icebreaker_tb.vvp: icebreaker_tb.v icebreaker.v spram.v uart.v cpu.v
 	iverilog -g2005-sv -o $@ $^ `yosys-config --datdir/ice40/cells_sim.v`
 
 icebreaker.json: icebreaker.v spram.v uart.v cpu.v
-	yosys -p 'synth_ice40 -device $(FAMILY) -top top -json $@' $^
+	yosys -p 'synth_ice40 -device $(FAMILY) -top icebreaker -json $@' $^
 
 icebreaker.asc: icebreaker.json
 	nextpnr-ice40 --$(DEVICE) --package $(PACKAGE) --freq $(FREQ) --asc $@ --pcf $(PIN_DEF) --json $<
