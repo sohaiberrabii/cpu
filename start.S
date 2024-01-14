@@ -96,23 +96,66 @@ test_next:
     // ===================
 
     // beq
-    TEST_BR_TAKEN(17, beq,  0,  0);
-    TEST_BR_TAKEN(18, beq,  1,  1);
-    TEST_BR_TAKEN(19, beq, -1, -1);
+    TEST_BR_TAKEN(17, beq,  0,  0)
+    TEST_BR_TAKEN(18, beq,  1,  1)
+    TEST_BR_TAKEN(19, beq, -1, -1)
+
+    TEST_BR_NOTTAKEN(20, beq,  0,  1 )
+    TEST_BR_NOTTAKEN(21, beq,  1,  0 )
+    TEST_BR_NOTTAKEN(22, beq, -1,  1 )
+    TEST_BR_NOTTAKEN(23, beq,  1, -1 )
+
+    TEST_BR_BYPASS(24, 0, 0, beq, 0, -1)
+    TEST_BR_BYPASS(25, 0, 1, beq, 0, -1)
+    TEST_BR_BYPASS(26, 0, 2, beq, 0, -1)
+    TEST_BR_BYPASS(27, 1, 0, beq, 0, -1)
+    TEST_BR_BYPASS(28, 1, 1, beq, 0, -1)
+    TEST_BR_BYPASS(29, 2, 0, beq, 0, -1)
+
+    TEST_BR_BYPASS(30, 0, 0, beq, 0, -1)
+    TEST_BR_BYPASS(31, 0, 1, beq, 0, -1)
+    TEST_BR_BYPASS(32, 0, 2, beq, 0, -1)
+    TEST_BR_BYPASS(33, 1, 0, beq, 0, -1)
+    TEST_BR_BYPASS(34, 1, 1, beq, 0, -1)
+    TEST_BR_BYPASS(35, 2, 0, beq, 0, -1)
+
+    TEST_CASE(36, x1, 3, \
+          li  x1, 1; \
+          beq x0, x0, 1f; \
+          addi x1, x1, 1; \
+          addi x1, x1, 1; \
+          addi x1, x1, 1; \
+          addi x1, x1, 1; \
+    1:    addi x1, x1, 1; \
+          addi x1, x1, 1; \
+    )
 
     // bne
-    TEST_BR_TAKEN(17, bne,  0,  1);
-    TEST_BR_TAKEN(18, bne,  1,  0);
-    TEST_BR_TAKEN(19, bne, -1,  1);
-    TEST_BR_TAKEN(20, bne,  1, -1);
+    TEST_BR_TAKEN(37, bne,  0,  1)
+    TEST_BR_TAKEN(38, bne,  1,  0)
+    TEST_BR_TAKEN(39, bne, -1,  1)
+    TEST_BR_TAKEN(40, bne,  1, -1)
 
     // bge
-    TEST_BR_TAKEN(21, bge,  0,  0);
-    TEST_BR_TAKEN(22, bge,  1,  1);
-    TEST_BR_TAKEN(23, bge, -1, -1);
-    TEST_BR_TAKEN(24, bge,  1,  0);
-    TEST_BR_TAKEN(25, bge,  1, -1);
-    TEST_BR_TAKEN(26, bge, -1, -2);
+    TEST_BR_TAKEN(41, bge,  0,  0)
+    TEST_BR_TAKEN(42, bge,  1,  1)
+    TEST_BR_TAKEN(43, bge, -1, -1)
+    TEST_BR_TAKEN(44, bge,  1,  0)
+    TEST_BR_TAKEN(45, bge,  1, -1)
+    TEST_BR_TAKEN(46, bge, -1, -2)
+
+    // bgeu
+    TEST_BR_TAKEN(47, bgeu, 0x00000000, 0x00000000)
+    TEST_BR_TAKEN(48, bgeu, 0x00000001, 0x00000001)
+    TEST_BR_TAKEN(49, bgeu, 0xffffffff, 0xffffffff)
+    TEST_BR_TAKEN(50, bgeu, 0x00000001, 0x00000000)
+    TEST_BR_TAKEN(51, bgeu, 0xffffffff, 0xfffffffe)
+    TEST_BR_TAKEN(52, bgeu, 0xffffffff, 0x00000000)
+
+    TEST_BR_NOTTAKEN(53, bgeu, 0x00000000, 0x00000001)
+    TEST_BR_NOTTAKEN(54, bgeu, 0xfffffffe, 0xffffffff)
+    TEST_BR_NOTTAKEN(55, bgeu, 0x00000000, 0xffffffff)
+    TEST_BR_NOTTAKEN(56, bgeu, 0x7fffffff, 0x80000000)
 
     // tests passed
     li x2, 0x20004

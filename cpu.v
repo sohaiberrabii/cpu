@@ -2,12 +2,12 @@
 
 module cpu(
     input clk, reset,
-    output [31:0] mem_addr,     // data address bus
-    output [31:0] mem_wdata,    // data to be written
-    output mem_write,           // asserted to write to data memory
-    input  [31:0] mem_rdata,    // input lines for both data and instr
-    input  [31:0] instr,        // instruction data
-    output [31:0] pc            // program counter for external instruction memory
+    output [31:0] mem_addr,
+    output [31:0] mem_wdata,
+    output mem_write,
+    input  [31:0] mem_rdata,
+    input  [31:0] instr,
+    output [31:0] pc
 );
     // register file
     reg [31:0] rf[31:0];
