@@ -157,6 +157,29 @@ test_next:
     TEST_BR_NOTTAKEN(55, bgeu, 0x00000000, 0xffffffff)
     TEST_BR_NOTTAKEN(56, bgeu, 0x7fffffff, 0x80000000)
 
+    // load/store
+    // ===================
+    TEST_CASE(57, x2, 0xdeadbeef, \
+          la x1, tdat;\
+          lw x2, 0(x1);\
+    )
+    TEST_CASE(58, x2, 0xffffbeef, \
+          la x1, tdat1;\
+          lh x2, 0(x1);\
+    )
+    TEST_CASE(59, x2, 0x0000beef, \
+          la x1, tdat1;\
+          lhu x2, 0(x1);\
+    )
+    TEST_CASE(60, x2, 0xffffffef, \
+          la x1, tdat1;\
+          lb x2, 0(x1);\
+    )
+    TEST_CASE(61, x2, 0x000000ef, \
+          la x1, tdat1;\
+          lbu x2, 0(x1);\
+    )
+
     // tests passed
     li x2, 0x20004
     sw zero, 0(x2)
@@ -166,3 +189,7 @@ pass: beq x2, x2, pass
 fail:
     li x2, 0x20004
     sw x30, 0(x2)
+
+.data
+tdat: .word 0xdeadbeef
+tdat1:  .half 0xbeef

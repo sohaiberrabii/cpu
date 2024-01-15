@@ -108,7 +108,12 @@ module cpu(
     reg memwrite_e, regwrite_e;
     reg memwrite_m, regwrite_m;
     reg memwrite_w, regwrite_w;
-    reg is_load_e, is_load_m, is_load_w;
+    reg is_load_e;
+    reg lw_e, lw_m, lw_w;
+    reg lh_e, lh_m, lh_w;
+    reg lhu_e, lhu_m, lhu_w;
+    reg lb_e, lb_m, lb_w;
+    reg lbu_e, lbu_m, lbu_w;
     always @(posedge clk) begin
         if (reset || flushe)
             {memwrite_e, regwrite_e} <= 0;
@@ -122,8 +127,26 @@ module cpu(
             regwrite_w <= regwrite_m;
 
             is_load_e <= is_lb_lh_lw_lbu_lhu;
-            is_load_m <= is_load_e;
-            is_load_w <= is_load_m;
+
+            lw_e <= instr_lw;
+            lw_m <= lw_e;
+            lw_w <= lw_m;
+
+            lh_e <= instr_lh;
+            lh_m <= lh_e;
+            lh_w <= lh_m;
+
+            lhu_e <= instr_lhu;
+            lhu_m <= lhu_e;
+            lhu_w <= lhu_m;
+
+            lb_e <= instr_lb;
+            lb_m <= lb_e;
+            lb_w <= lb_m;
+
+            lbu_e <= instr_lbu;
+            lbu_m <= lbu_e;
+            lbu_w <= lbu_m;
     end
 
     // alu ops
@@ -320,7 +343,19 @@ module cpu(
     // writeback
     reg [4:0] rd_w;
     reg [31:0] aluresult_w;
-    wire [31:0] result_w = is_load_w ? rdata_w : aluresult_w;
+
+    reg [31:0] result_w;
+
+    (* parallel_case *)
+    always @* case(1'b1)
+        lw_w:    result_w = rdata_w;
+        lh_w:    result_w = {{16{rdata_w[15]}}, rdata_w[15:0]};
+        lhu_w:   result_w = {24'b0, rdata_w[15:0]};
+        lb_w:    result_w = {{24{rdata_w[7]}}, rdata_w[7:0]};
+        lbu_w:   result_w = {24'b0, rdata_w[7:0]};
+        default: result_w = aluresult_w;
+    endcase
+
     always @(negedge clk)
         if (regwrite_w) rf[rd_w] <= result_w;
 endmodule
