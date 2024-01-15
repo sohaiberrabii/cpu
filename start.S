@@ -157,32 +157,54 @@ test_next:
     TEST_BR_NOTTAKEN(55, bgeu, 0x00000000, 0xffffffff)
     TEST_BR_NOTTAKEN(56, bgeu, 0x7fffffff, 0x80000000)
 
-    // load/store
+    // load
     // ===================
     TEST_CASE(57, x2, 0xdeadbeef, \
-          la x1, tdat;\
+          la x1, tdat1;\
           lw x2, 0(x1);\
     )
     TEST_CASE(58, x2, 0xffffbeef, \
-          la x1, tdat1;\
+          la x1, tdat2;\
           lh x2, 0(x1);\
     )
     TEST_CASE(59, x2, 0x0000beef, \
-          la x1, tdat1;\
+          la x1, tdat2;\
           lhu x2, 0(x1);\
     )
     TEST_CASE(60, x2, 0xffffffef, \
-          la x1, tdat1;\
+          la x1, tdat2;\
           lb x2, 0(x1);\
     )
     TEST_CASE(61, x2, 0x000000ef, \
-          la x1, tdat1;\
+          la x1, tdat2;\
           lbu x2, 0(x1);\
+    )
+
+    // store
+    // ===================
+    TEST_CASE(62, x3, 0xbaadf00d, \
+          la x1, tdat;\
+          li x2, 0xbaadf00d;\
+          sw x2, 0(x1);\
+          lw x3, 0(x1);\
+    )
+    TEST_CASE(63, x3, 0xbaadbeef, \
+          la x1, tdat;\
+          li x2, 0xeeecbeef;\
+          sh x2, 0(x1);\
+          lw x3, 0(x1);\
+    )
+    TEST_CASE(64, x3, 0xbaadbead, \
+          la x1, tdat;\
+          li x2, 0xffffffad;\
+          sb x2, 0(x1);\
+          lw x3, 0(x1);\
     )
 
     // tests passed
     li x2, 0x20004
     sw zero, 0(x2)
+
 // infinite loop
 pass: beq x2, x2, pass
 
@@ -191,5 +213,6 @@ fail:
     sw x30, 0(x2)
 
 .data
-tdat: .word 0xdeadbeef
-tdat1:  .half 0xbeef
+tdat:
+tdat1: .word 0xdeadbeef
+tdat2: .half 0xbeef

@@ -4,7 +4,7 @@ module cpu(
     input clk, reset,
     output [31:0] mem_addr,
     output [31:0] mem_wdata,
-    output mem_write,
+    output [3:0]  mem_write,
     input  [31:0] mem_rdata,
     input  [31:0] instr,
     output [31:0] pc
@@ -12,15 +12,15 @@ module cpu(
     // register file
     reg [31:0] rf[31:0];
 
-    wire [31:0] rdata_w = mem_rdata;
-    assign mem_addr  = aluresult_m;
-    assign mem_write = memwrite_m;
-    assign mem_wdata = wdata_m;
+    wire [31:0] rdata_m = mem_rdata;
+    assign mem_addr  = alu_result;
+    assign mem_write = memwrite_e;
+    assign mem_wdata = src2;
     assign pc        = pc_f;
 
     // memory stage signals
     reg [4:0] rd_m;
-    reg [31:0] aluresult_m, wdata_m;
+    reg [31:0] aluresult_m;
 
     // fetch
     wire [31:0] instr_f = instr;
@@ -38,6 +38,7 @@ module cpu(
     // decode
     reg [31:0] instr_d, pc_d;
 
+    // TODO: pc_f -> instr_d, instead of pc_f -> instr_f -> instr_d
     always @(posedge clk) begin
         if (reset | flushd)
             {instr_d, pc_d} <= 0;
@@ -105,26 +106,27 @@ module cpu(
     wire is_j_type = instr_jal;
 
     // control lines for load/store
-    reg memwrite_e, regwrite_e;
-    reg memwrite_m, regwrite_m;
-    reg memwrite_w, regwrite_w;
+    reg [3:0] memwrite_e;
+    reg regwrite_e, regwrite_m, regwrite_w;
+
     reg is_load_e;
     reg lw_e, lw_m, lw_w;
     reg lh_e, lh_m, lh_w;
     reg lhu_e, lhu_m, lhu_w;
     reg lb_e, lb_m, lb_w;
     reg lbu_e, lbu_m, lbu_w;
+
     always @(posedge clk) begin
         if (reset || flushe)
             {memwrite_e, regwrite_e} <= 0;
         else
             regwrite_e <= |{is_lui_auipc_jal_jalr, is_lb_lh_lw_lbu_lhu, is_alu_reg_imm, is_alu_reg_reg};
-            memwrite_e <= is_sb_sh_sw;
-
             regwrite_m <= regwrite_e;
-            memwrite_m <= memwrite_e;
-
             regwrite_w <= regwrite_m;
+
+            memwrite_e[0] <= is_sb_sh_sw;
+            memwrite_e[1] <= instr_sh || instr_sw;
+            memwrite_e[3:2] <= {2{instr_sw}};
 
             is_load_e <= is_lb_lh_lw_lbu_lhu;
 
@@ -307,8 +309,6 @@ module cpu(
         rd_m <= rd_e;
         rd_w <= rd_m;
 
-        wdata_m = src2;
-
         aluresult_m <= alu_result;
         aluresult_w <= aluresult_m;
     end
@@ -343,8 +343,9 @@ module cpu(
     // writeback
     reg [4:0] rd_w;
     reg [31:0] aluresult_w;
-
     reg [31:0] result_w;
+    reg [31:0] rdata_w;
+    always @(posedge clk) rdata_w <= rdata_m;
 
     (* parallel_case *)
     always @* case(1'b1)

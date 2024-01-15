@@ -10,14 +10,16 @@ module test;
     // memory
     reg [31:0] mem[0:32767];
     initial $readmemh("firmware.hex", mem);
-    wire mem_write;
+    wire [3:0] mem_write;
     wire [31:0] mem_wdata, mem_addr;
     reg [31:0] mem_rdata;
-    always @(posedge clk)
-        if (mem_write)
-            mem[mem_addr[16:2]] <= mem_wdata;
-        else
-            mem_rdata <= mem[mem_addr[16:2]];
+    always @(posedge clk) begin
+        mem_rdata <= mem[mem_addr[16:2]];
+        if (mem_write[0]) mem[mem_addr[16:2]][7:0] <= mem_wdata[7:0];
+        if (mem_write[1]) mem[mem_addr[16:2]][15:8] <= mem_wdata[15:8];
+        if (mem_write[2]) mem[mem_addr[16:2]][23:16] <= mem_wdata[23:16];
+        if (mem_write[3]) mem[mem_addr[16:2]][32:24] <= mem_wdata[32:24];
+    end
 
     wire [31:0] pc;
     wire [31:0] instr = mem[pc[31:2]];
@@ -38,7 +40,7 @@ module test;
 
     // check results
     always @(negedge clk) begin
-        if(mem_write & mem_addr == 32'h20004)
+        if(|mem_write && mem_addr == 32'h20004)
             if(mem_wdata == 0) begin
                 $display("Simulation succeeded");
                 $finish;
