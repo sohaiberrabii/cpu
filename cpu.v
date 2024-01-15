@@ -28,8 +28,8 @@ module cpu(
     always @(posedge clk) begin
         if (reset)
             pc_f <= 0;
-        else if (~stallf)
-            if (pcsrc_e)
+        else if (~load_stall)
+            if (take_branch)
                 pc_f <= {pctarget_e[31:1], 1'b0};
             else
                 pc_f <= pc_f + 4;
@@ -42,7 +42,7 @@ module cpu(
     always @(posedge clk) begin
         if (reset | flushd)
             {instr_d, pc_d} <= 0;
-        else if (~stalld)
+        else if (~load_stall)
             {instr_d, pc_d} <= {instr_f, pc_f};
     end
 
@@ -181,7 +181,7 @@ module cpu(
     reg [4:0] rs1_e, rs2_e, rd_e;
     reg [31:0] pc_e, immext_e;
     wire [31:0] pctarget_e;
-    wire pcsrc_e;
+    wire take_branch;
 
     always @(posedge clk) begin
         if (reset || flushe)
@@ -294,7 +294,7 @@ module cpu(
     // extra adder required for conditional branches where alu is used to compare
     // should auipc, jal just use pc + imm adder instead of alu
     assign pctarget_e = alu_branch_cond ? alu_pcplusimm : alu_out;
-    assign pcsrc_e = alu_branch_cond && alu_zero || alu_jump;
+    assign take_branch = alu_branch_cond && alu_zero || alu_jump;
 
     reg [31:0] alu_result;
     (* parallel_case *)
@@ -313,32 +313,30 @@ module cpu(
         aluresult_w <= aluresult_m;
     end
 
-    // hazard logic
-    wire [1:0] forward1, forward2;
-    wire flushd, flushe, stallf, stalld;
+    // stall
+    wire load_stall = (rd_e == instr_d[19:15] | rd_e == instr_d[24:20]) & is_load_e;
 
+    // flush
+    wire flushd = take_branch;
+    wire flushe = take_branch | load_stall;
+
+    // forward
     reg [31:0] src1, src2;
     always @* begin
-        case(forward1)
-           2'b00: src1 = rs1d_e;
-           2'b01: src1 = result_w;
-           2'b10: src1 = aluresult_m;
-        endcase
-        case(forward2)
-           2'b00: src2 = rs2d_e;
-           2'b01: src2 = result_w;
-           2'b10: src2 = aluresult_m;
-        endcase
-    end
+        if ((regwrite_m & rs1_e == rd_m) & rs1_e != 0)
+            src1 = aluresult_m;
+        else if ((regwrite_w & rs1_e == rd_w) & rs1_e != 0)
+            src1 = result_w;
+        else
+            src1 = rs1d_e;
 
-    hazard hzd (
-        .regwrite_m(regwrite_m), .regwrite_w(regwrite_w),
-        .rs1_e(rs1_e), .rs2_e(rs2_e), .rd_m(rd_m), .rd_w(rd_w),
-        .rs1_d(instr_d[19:15]), .rs2_d(instr_d[24:20]), .rd_e(rd_e),
-        .forward1(forward1), .forward2(forward2),
-        .pcsrc_e(pcsrc_e), .flushd(flushd), .flushe(flushe),
-        .stallf(stallf), .stalld(stalld), .is_load_e(is_load_e)
-    );
+        if ((regwrite_m & rs2_e == rd_m) & rs2_e != 0)
+            src2 = aluresult_m;
+        else if ((regwrite_w & rs2_e == rd_w) & rs2_e != 0)
+            src2 = result_w;
+        else
+            src2 = rs2d_e;
+    end
 
     // writeback
     reg [4:0] rd_w;
@@ -359,39 +357,4 @@ module cpu(
 
     always @(negedge clk)
         if (regwrite_w) rf[rd_w] <= result_w;
-endmodule
-
-module hazard (
-    input regwrite_m, regwrite_w,
-    input [4:0] rs1_d, rs2_d, rs1_e, rs2_e, rd_e, rd_m, rd_w,
-    output reg [1:0] forward1, forward2,
-    input is_load_e,
-    input pcsrc_e,
-    output stalld, stallf,
-    output flushd, flushe
-);
-    // forward
-    always @(*) begin
-        if ((regwrite_m & rs1_e == rd_m) & rs1_e != 0)
-            forward1 = 2'b10;
-        else if ((regwrite_w & rs1_e == rd_w) & rs1_e != 0)
-            forward1 = 2'b01;
-        else
-            forward1 = 2'b00;
-
-        if ((regwrite_m & rs2_e == rd_m) & rs2_e != 0)
-            forward2 = 2'b10;
-        else if ((regwrite_w & rs2_e == rd_w) & rs2_e != 0)
-            forward2 = 2'b01;
-        else
-            forward2 = 2'b00;
-    end
-
-    // stall
-    wire load_stall = (rd_e == rs1_d | rd_e == rs2_d) & is_load_e;
-    assign {stallf, stalld} = {2{load_stall}};
-
-    // flush
-    assign flushd = pcsrc_e;
-    assign flushe = pcsrc_e | load_stall;
 endmodule
