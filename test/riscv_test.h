@@ -53,6 +53,7 @@ TEST_FUNC_NAME:				\
 	sw	a2,0(a0);		\
 	sw	a3,0(a0);		\
 	sw	a2,0(a0);		\
+  sw TESTNUM, 4(a0);\
 	sw	a4,0(a0);		\
 	ebreak;
 

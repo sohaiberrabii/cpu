@@ -40,18 +40,20 @@ module test;
     // check test status
     reg [7:0] failed = 0;
     always @(posedge clk) begin
+        if(|mem_write && mem_addr == 32'h20004)
+            $write("%c", mem_wdata[7:0]);
+
         // ebreak
         if(instr == 32'h00100073) failed <= failed + 1;
-
-        if(mem_addr == 32'h20004) begin
-            $write("%c", mem_wdata[7:0]);
-            if(mem_wdata == 123456789) begin
+        if(|mem_write && mem_addr == 32'h20008) begin
+            if(mem_wdata == 0) begin
                 if (failed > 0)
                     $display("Failed %d tests", failed);
                 else
                     $display("Tests passed");
                 $finish;
-            end
+            end else
+                $write(": %3d", mem_wdata);
         end
     end
 endmodule

@@ -83,6 +83,6 @@ start:
 	TEST(or)
 	TEST(and)
 
-    li x2, 0x20004
-    li x1, 123456789
+    li x2, 0x20008
+    li x1, 0
     sw x1, 0(x2)
