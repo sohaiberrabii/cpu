@@ -3,7 +3,7 @@
 module cpu(
     input clk, reset,
     output [31:0] mem_addr,
-    output [31:0] mem_wdata,
+    output reg [31:0] mem_wdata,
     output [3:0]  mem_write,
     input  [31:0] mem_rdata,
     input  [31:0] instr,
@@ -14,7 +14,6 @@ module cpu(
 
     assign mem_addr  = alu_result;
     assign mem_write = memwrite_e;
-    assign mem_wdata = src2;
     assign pc        = pc_f;
 
     // memory stage signals
@@ -106,6 +105,8 @@ module cpu(
 
     // control lines for load/store
     reg [3:0] memwrite_e;
+    reg sb_e, sh_e, sw_e;
+
     reg regwrite_e, regwrite_m, regwrite_w;
 
     reg is_load_e;
@@ -117,15 +118,15 @@ module cpu(
 
     always @(posedge clk) begin
         if (reset || flushe)
-            {memwrite_e, regwrite_e} <= 0;
+            {regwrite_e, sb_e, sh_e, sw_e} <= 0;
         else
             regwrite_e <= |{is_lui_auipc_jal_jalr, is_lb_lh_lw_lbu_lhu, is_alu_reg_imm, is_alu_reg_reg};
             regwrite_m <= regwrite_e;
             regwrite_w <= regwrite_m;
 
-            memwrite_e[0] <= is_sb_sh_sw;
-            memwrite_e[1] <= instr_sh || instr_sw;
-            memwrite_e[3:2] <= {2{instr_sw}};
+            sb_e <= instr_sb;
+            sh_e <= instr_sh;
+            sw_e <= instr_sw;
 
             is_load_e <= is_lb_lh_lw_lbu_lhu;
 
@@ -149,6 +150,26 @@ module cpu(
             lbu_m <= lbu_e;
             lbu_w <= lbu_m;
     end
+
+    (* parallel_case *)
+    always @* case(1'b1)
+        sb_e: begin
+            memwrite_e = 4'b0001 << alu_result[1:0];
+            mem_wdata = {4{src2[7:0]}};
+        end
+        sh_e: begin
+            memwrite_e = alu_result[1] ? 4'b1100 : 4'b0011;
+            mem_wdata = {2{src2[15:0]}};
+        end
+        sw_e: begin
+            memwrite_e = 4'b1111;
+            mem_wdata = src2;
+        end
+        default: begin
+            memwrite_e = 4'b0;
+            mem_wdata = 32'bx;
+        end
+    endcase
 
     // alu ops
     reg alu_add;
