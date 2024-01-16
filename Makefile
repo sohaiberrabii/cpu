@@ -67,7 +67,7 @@ firmware.bin: firmware.elf
 	$(TOOLCHAIN_PREFIX)objcopy -O binary $< $@
 
 firmware.elf: start.o $(TEST_OBJS) sections.lds
-	$(TOOLCHAIN_PREFIX)ld -o $@ -T sections.lds start.o $(TEST_OBJS) # test/{sra,or,and}.o
+	$(TOOLCHAIN_PREFIX)ld -o $@ -T sections.lds start.o $(TEST_OBJS)
 
 firmware.hex: firmware.bin makehex.py
 	python3 makehex.py $< 32768 > $@

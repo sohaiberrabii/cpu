@@ -343,11 +343,10 @@ module cpu(
     reg [31:0] result_w;
     reg [31:0] rdata;
 
-    // TODO: fix write strobe for unaligned stores (aligned to the access type)
     (* parallel_case *)
     always @(posedge clk) case(1'b1)
         lw_m: rdata <= mem_rdata;
-        lhu_m || lh_m: case (aluresult_m[0])
+        lhu_m || lh_m: case (aluresult_m[1])
             1'b0: rdata <= {16'b0, mem_rdata[15:0]};
             1'b1: rdata <= {16'b0, mem_rdata[31:16]};
         endcase
