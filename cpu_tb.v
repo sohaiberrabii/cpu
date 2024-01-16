@@ -2,8 +2,6 @@ module test;
     reg clk = 0;
     always #5 clk = ~clk;
 
-    // TODO: fix reset shenanigans to not need it on start
-    // probably due to ffs needing reset for initialization?
     reg reset = 1;
     initial #5 reset <= 0;
 
@@ -13,6 +11,7 @@ module test;
     wire [3:0] mem_write;
     wire [31:0] mem_wdata, mem_addr;
     reg [31:0] mem_rdata;
+
     always @(posedge clk) begin
         mem_rdata <= mem[mem_addr[16:2]];
         if (mem_write[0]) mem[mem_addr[16:2]][7:0] <= mem_wdata[7:0];
@@ -38,16 +37,22 @@ module test;
         $dumpvars(0, test);
     end
 
-    // check results
-    always @(negedge clk) begin
-        if(|mem_write && mem_addr == 32'h20004)
-            if(mem_wdata == 0) begin
-                $display("Simulation succeeded");
+    // check test status
+    reg [7:0] failed = 0;
+    always @(posedge clk) begin
+        // ebreak
+        if(instr == 32'h00100073) failed <= failed + 1;
+
+        if(mem_addr == 32'h20004) begin
+            $write("%c", mem_wdata[7:0]);
+            if(mem_wdata == 123456789) begin
+                if (failed > 0)
+                    $display("Failed %d tests", failed);
+                else
+                    $display("Tests passed");
                 $finish;
-            end else begin
-                $display("Failed test %d", mem_wdata);
-                $stop;
             end
+        end
     end
 endmodule
 

@@ -12,7 +12,6 @@ module cpu(
     // register file
     reg [31:0] rf[31:0];
 
-    wire [31:0] rdata_m = mem_rdata;
     assign mem_addr  = alu_result;
     assign mem_write = memwrite_e;
     assign mem_wdata = src2;
@@ -38,7 +37,7 @@ module cpu(
     // decode
     reg [31:0] instr_d, pc_d;
 
-    // TODO: pc_f -> instr_d, instead of pc_f -> instr_f -> instr_d
+    // TODO: given synchronous imem can these extra ffs be removed?
     always @(posedge clk) begin
         if (reset | flushd)
             {instr_d, pc_d} <= 0;
@@ -342,16 +341,30 @@ module cpu(
     reg [4:0] rd_w;
     reg [31:0] aluresult_w;
     reg [31:0] result_w;
-    reg [31:0] rdata_w;
-    always @(posedge clk) rdata_w <= rdata_m;
+    reg [31:0] rdata;
+
+    // TODO: fix write strobe for unaligned stores (aligned to the access type)
+    (* parallel_case *)
+    always @(posedge clk) case(1'b1)
+        lw_m: rdata <= mem_rdata;
+        lhu_m || lh_m: case (aluresult_m[0])
+            1'b0: rdata <= {16'b0, mem_rdata[15:0]};
+            1'b1: rdata <= {16'b0, mem_rdata[31:16]};
+        endcase
+        lbu_m || lb_m: case (aluresult_m[1:0])
+            2'b00: rdata <= {24'b0, mem_rdata[7:0]};
+            2'b01: rdata <= {24'b0, mem_rdata[15:8]};
+            2'b10: rdata <= {24'b0, mem_rdata[23:16]};
+            2'b11: rdata <= {24'b0, mem_rdata[31:24]};
+        endcase
+        default: rdata <= 32'bx;
+    endcase
 
     (* parallel_case *)
     always @* case(1'b1)
-        lw_w:    result_w = rdata_w;
-        lh_w:    result_w = {{16{rdata_w[15]}}, rdata_w[15:0]};
-        lhu_w:   result_w = {24'b0, rdata_w[15:0]};
-        lb_w:    result_w = {{24{rdata_w[7]}}, rdata_w[7:0]};
-        lbu_w:   result_w = {24'b0, rdata_w[7:0]};
+        |{lw_w, lhu_w, lbu_w}: result_w = rdata;
+        lh_w: result_w = $signed(rdata[15:0]);
+        lb_w: result_w = $signed(rdata[7:0]);
         default: result_w = aluresult_w;
     endcase
 

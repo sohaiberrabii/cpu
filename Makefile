@@ -8,6 +8,8 @@ PACKAGE = sg48
 # riscv prefix
 TOOLCHAIN_PREFIX = riscv32-unknown-elf-
 
+TEST_OBJS = $(addsuffix .o,$(basename $(wildcard test/*.S)))
+
 all: icebreaker.rpt icebreaker.bin firmware.hex
 
 sim: cpu_tb.vcd
@@ -52,14 +54,20 @@ icebreaker.rpt: icebreaker.asc
 prog: icebreaker.bin
 	iceprog $<
 
+test/%.o: test/%.S test/riscv_test.h test/test_macros.h
+	$(TOOLCHAIN_PREFIX)gcc -c -mabi=ilp32 -march=rv32im -o $@ \
+		-DTEST_FUNC_NAME=$(notdir $(basename $<)) \
+		-DTEST_FUNC_TXT='"$(notdir $(basename $<))"'\
+		-DTEST_FUNC_RET=$(notdir $(basename $<))_ret $<
+
 %.o: %.S
-	$(TOOLCHAIN_PREFIX)gcc -c -mabi=ilp32 -march=rv32i -o $@ $<
+	$(TOOLCHAIN_PREFIX)gcc -c -mabi=ilp32 -march=rv32i  -o $@ $<
 
 firmware.bin: firmware.elf
 	$(TOOLCHAIN_PREFIX)objcopy -O binary $< $@
 
-firmware.elf: start.o sections.lds
-	$(TOOLCHAIN_PREFIX)ld -o $@ -T sections.lds start.o
+firmware.elf: start.o $(TEST_OBJS) sections.lds
+	$(TOOLCHAIN_PREFIX)ld -o $@ -T sections.lds start.o $(TEST_OBJS) # test/{sra,or,and}.o
 
 firmware.hex: firmware.bin makehex.py
 	python3 makehex.py $< 32768 > $@

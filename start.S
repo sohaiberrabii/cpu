@@ -1,218 +1,88 @@
-#include "test_helpers.h"
-
 .text
+
 start:
-    // Tests from https://github.com/YosysHQ/picorv32
 
-    // addi: init register
-    TEST_CASE(1, x1, 0x00000001, addi x1, zero, 1)
-    TEST_CASE(2, x1, 0x00000003, addi x1, zero, 3)
+	addi x1, zero, 0
+	addi x2, zero, 0
+	addi x3, zero, 0
+	addi x4, zero, 0
+	addi x5, zero, 0
+	addi x6, zero, 0
+	addi x7, zero, 0
+	addi x8, zero, 0
+	addi x9, zero, 0
+	addi x10, zero, 0
+	addi x11, zero, 0
+	addi x12, zero, 0
+	addi x13, zero, 0
+	addi x14, zero, 0
+	addi x15, zero, 0
+	addi x16, zero, 0
+	addi x17, zero, 0
+	addi x18, zero, 0
+	addi x19, zero, 0
+	addi x20, zero, 0
+	addi x21, zero, 0
+	addi x22, zero, 0
+	addi x23, zero, 0
+	addi x24, zero, 0
+	addi x25, zero, 0
+	addi x26, zero, 0
+	addi x27, zero, 0
+	addi x28, zero, 0
+	addi x29, zero, 0
+	addi x30, zero, 0
+	addi x31, zero, 0
 
-    // lui
-    TEST_CASE(3, x1, 0xabcde000, lui x1, 0xabcde)
-    TEST_CASE(4, x0, 0, lui x0, 0x10000)
+// test infra from picorv32 and riscv-tests
+# define TEST(n) \
+	.global n; \
+	jal zero,n; \
+	.global n ## _ret; \
+	n ## _ret:
 
-    /* // auipc */
-    TEST_CASE(5, a0, 10000,
-      lla a0, 1f + 10000; \
-      jal a1, 1f; \
-      1: sub a0, a0, a1
-    )
-    TEST_CASE(6, a0, -10000, \
-      lla a0, 1f - 10000; \
-      jal a1, 1f; \
-      1: sub a0, a0, a1
-    )
+	TEST(lui)
+	TEST(auipc)
+	TEST(j)
+	TEST(jal)
+	TEST(jalr)
 
-    // add
-    TEST_RR(7,  add, 0x00000000, 0x00000000, 0x00000000)
-    TEST_RR(8,  add, 0x00000000, 0x00000001, 0xffffffff)
-    TEST_RR(9,  add, 0x0000000a, 0x00000003, 0x00000007)
-    TEST_RR(10, add, 0x0abcde00, 0x80000000, 0x8abcde00)
+	TEST(beq)
+	TEST(bne)
+	TEST(blt)
+	TEST(bge)
+	TEST(bltu)
+	TEST(bgeu)
 
-    // jump tests
-    // ====================
+	TEST(lb)
+	TEST(lh)
+	TEST(lw)
+	TEST(lbu)
+	TEST(lhu)
 
-    // j
-    li TESTNUM, 11
-    j test_next
-    j fail
-test_next:
-    TEST_CASE(12, x1, 3, \
-        li  x1, 1; \
-        j 1f; \
-        addi x1, x1, 1; \
-        addi x1, x1, 1; \
-    1:  addi x1, x1, 1; \
-        addi x1, x1, 1; \
-    )
+	TEST(sb)
+	TEST(sh)
+	TEST(sw)
 
-    // jal
-    li  TESTNUM, 13
-    li  ra, 0
-    linkaddr_2:
-      jal target_2
-      nop
-      nop
-      j fail
-    target_2:
-      la  x2, linkaddr_2
-      addi x2, x2, 4
-      bne x2, ra, fail
-    TEST_CASE(14, x2, 3, \
-        li  x2, 1; \
-        jal 1f; \
-        addi x2, x2, 1; \
-        addi x2, x2, 1; \
-    1:  addi x2, x2, 1; \
-        addi x2, x2, 1; \
-    )
+	TEST(addi)
+	TEST(slti)
+	TEST(xori)
+	TEST(ori)
+	TEST(andi)
+	TEST(slli)
+	TEST(srli)
+	TEST(srai)
 
-    // jalr
-    li  TESTNUM, 15
-    li  x31, 0
-    la  x2, target_3
-    linkaddr_3:
-      jalr x19, x2, 0
-      nop
-      nop
-      j fail
-    target_3:
-      la  x1, linkaddr_3
-      addi x1, x1, 4
-      bne x1, x19, fail
+	TEST(add)
+	TEST(sub)
+	TEST(sll)
+	TEST(slt)
+	TEST(xor)
+	TEST(srl)
+	TEST(sra)
+	TEST(or)
+	TEST(and)
 
-    li  TESTNUM, 16
-    li  x31, 0
-    la  x3, target_4
-    linkaddr_4:
-      jalr x0, x3, 0
-      nop
-      j fail
-    target_4:
-      bne x31, x0, fail
-
-    // taken branch tests
-    // ===================
-
-    // beq
-    TEST_BR_TAKEN(17, beq,  0,  0)
-    TEST_BR_TAKEN(18, beq,  1,  1)
-    TEST_BR_TAKEN(19, beq, -1, -1)
-
-    TEST_BR_NOTTAKEN(20, beq,  0,  1 )
-    TEST_BR_NOTTAKEN(21, beq,  1,  0 )
-    TEST_BR_NOTTAKEN(22, beq, -1,  1 )
-    TEST_BR_NOTTAKEN(23, beq,  1, -1 )
-
-    TEST_BR_BYPASS(24, 0, 0, beq, 0, -1)
-    TEST_BR_BYPASS(25, 0, 1, beq, 0, -1)
-    TEST_BR_BYPASS(26, 0, 2, beq, 0, -1)
-    TEST_BR_BYPASS(27, 1, 0, beq, 0, -1)
-    TEST_BR_BYPASS(28, 1, 1, beq, 0, -1)
-    TEST_BR_BYPASS(29, 2, 0, beq, 0, -1)
-
-    TEST_BR_BYPASS(30, 0, 0, beq, 0, -1)
-    TEST_BR_BYPASS(31, 0, 1, beq, 0, -1)
-    TEST_BR_BYPASS(32, 0, 2, beq, 0, -1)
-    TEST_BR_BYPASS(33, 1, 0, beq, 0, -1)
-    TEST_BR_BYPASS(34, 1, 1, beq, 0, -1)
-    TEST_BR_BYPASS(35, 2, 0, beq, 0, -1)
-
-    TEST_CASE(36, x1, 3, \
-          li  x1, 1; \
-          beq x0, x0, 1f; \
-          addi x1, x1, 1; \
-          addi x1, x1, 1; \
-          addi x1, x1, 1; \
-          addi x1, x1, 1; \
-    1:    addi x1, x1, 1; \
-          addi x1, x1, 1; \
-    )
-
-    // bne
-    TEST_BR_TAKEN(37, bne,  0,  1)
-    TEST_BR_TAKEN(38, bne,  1,  0)
-    TEST_BR_TAKEN(39, bne, -1,  1)
-    TEST_BR_TAKEN(40, bne,  1, -1)
-
-    // bge
-    TEST_BR_TAKEN(41, bge,  0,  0)
-    TEST_BR_TAKEN(42, bge,  1,  1)
-    TEST_BR_TAKEN(43, bge, -1, -1)
-    TEST_BR_TAKEN(44, bge,  1,  0)
-    TEST_BR_TAKEN(45, bge,  1, -1)
-    TEST_BR_TAKEN(46, bge, -1, -2)
-
-    // bgeu
-    TEST_BR_TAKEN(47, bgeu, 0x00000000, 0x00000000)
-    TEST_BR_TAKEN(48, bgeu, 0x00000001, 0x00000001)
-    TEST_BR_TAKEN(49, bgeu, 0xffffffff, 0xffffffff)
-    TEST_BR_TAKEN(50, bgeu, 0x00000001, 0x00000000)
-    TEST_BR_TAKEN(51, bgeu, 0xffffffff, 0xfffffffe)
-    TEST_BR_TAKEN(52, bgeu, 0xffffffff, 0x00000000)
-
-    TEST_BR_NOTTAKEN(53, bgeu, 0x00000000, 0x00000001)
-    TEST_BR_NOTTAKEN(54, bgeu, 0xfffffffe, 0xffffffff)
-    TEST_BR_NOTTAKEN(55, bgeu, 0x00000000, 0xffffffff)
-    TEST_BR_NOTTAKEN(56, bgeu, 0x7fffffff, 0x80000000)
-
-    // load
-    // ===================
-    TEST_CASE(57, x2, 0xdeadbeef, \
-          la x1, tdat1;\
-          lw x2, 0(x1);\
-    )
-    TEST_CASE(58, x2, 0xffffbeef, \
-          la x1, tdat2;\
-          lh x2, 0(x1);\
-    )
-    TEST_CASE(59, x2, 0x0000beef, \
-          la x1, tdat2;\
-          lhu x2, 0(x1);\
-    )
-    TEST_CASE(60, x2, 0xffffffef, \
-          la x1, tdat2;\
-          lb x2, 0(x1);\
-    )
-    TEST_CASE(61, x2, 0x000000ef, \
-          la x1, tdat2;\
-          lbu x2, 0(x1);\
-    )
-
-    // store
-    // ===================
-    TEST_CASE(62, x3, 0xbaadf00d, \
-          la x1, tdat;\
-          li x2, 0xbaadf00d;\
-          sw x2, 0(x1);\
-          lw x3, 0(x1);\
-    )
-    TEST_CASE(63, x3, 0xbaadbeef, \
-          la x1, tdat;\
-          li x2, 0xeeecbeef;\
-          sh x2, 0(x1);\
-          lw x3, 0(x1);\
-    )
-    TEST_CASE(64, x3, 0xbaadbead, \
-          la x1, tdat;\
-          li x2, 0xffffffad;\
-          sb x2, 0(x1);\
-          lw x3, 0(x1);\
-    )
-
-    // tests passed
     li x2, 0x20004
-    sw zero, 0(x2)
-
-// infinite loop
-pass: beq x2, x2, pass
-
-fail:
-    li x2, 0x20004
-    sw x30, 0(x2)
-
-.data
-tdat:
-tdat1: .word 0xdeadbeef
-tdat2: .half 0xbeef
+    li x1, 123456789
+    sw x1, 0(x2)
