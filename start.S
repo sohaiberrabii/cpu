@@ -1,5 +1,7 @@
 .text
 
+.global hello
+
 start:
 
 	addi x1, zero, 0
@@ -33,6 +35,8 @@ start:
 	addi x29, zero, 0
 	addi x30, zero, 0
 	addi x31, zero, 0
+
+    jal hello
 
 // test infra from picorv32 and riscv-tests
 # define TEST(n) \

@@ -63,11 +63,14 @@ test/%.o: test/%.S test/riscv_test.h test/test_macros.h
 %.o: %.S
 	$(TOOLCHAIN_PREFIX)gcc -c -mabi=ilp32 -march=rv32i  -o $@ $<
 
+%.o: %.c
+	$(TOOLCHAIN_PREFIX)gcc -c -Os -mabi=ilp32 -march=rv32i -nostdlib -ffreestanding -o $@ $<
+
 firmware.bin: firmware.elf
 	$(TOOLCHAIN_PREFIX)objcopy -O binary $< $@
 
-firmware.elf: start.o $(TEST_OBJS) sections.lds
-	$(TOOLCHAIN_PREFIX)ld -o $@ -T sections.lds start.o $(TEST_OBJS)
+firmware.elf: sections.lds start.o hello.o $(TEST_OBJS)
+	$(TOOLCHAIN_PREFIX)ld -o $@ -Map firmware.map -T $^
 
 firmware.hex: firmware.bin makehex.py
 	python3 makehex.py $< 32768 > $@
@@ -76,7 +79,8 @@ dis: firmware.elf
 	riscv32-unknown-elf-objdump -Mnumeric -d $< > firmware.dis
 
 clean:
-	rm -f icebreaker.{json,rpt,asc} *.log *.vvp *.vcd synth.v *.o *.elf *.hex *.bin *.dis
+	rm -f icebreaker.{json,rpt,asc} *.log *.vvp *.vcd synth.v
+	rm -f firmware.{map,elf,hex,bin,dis} {start,hello}.o test/*.o
 
 .PHONY: all prog sim synsim icebsim dis
 .PRECIOUS: cpu_tb.vcd
