@@ -1,34 +1,42 @@
-module corescore_emitter_uart #(parameter clk_freq_hz = 0, parameter baud_rate = 57600) (
-   input wire 	    i_clk,
-   input wire 	    i_rst,
-   input wire [7:0] i_data,
-   input wire 	    i_valid,
-   output reg 	    o_ready,
-   output wire 	    o_uart_tx
+module uart #(parameter integer CLK_DIV = 2) (
+    input clk,
+    input rst,
+
+    output tx,
+    input rx,
+
+    input i_valid,
+    input [7:0] i_data,
+    output o_ready,
+    output [7:0] o_data
 );
 
-   localparam START_VALUE = clk_freq_hz / baud_rate;
-   localparam WIDTH = $clog2(START_VALUE);
+    reg [$clog2(CLK_DIV):0] send_divcnt;
+    reg [3:0] send_bitcnt;
 
-   reg [WIDTH:0] cnt;
-   reg [9:0] data;
+    reg [9:0] recv_buf;
+    reg [9:0] send_buf;
 
-   assign o_uart_tx = data[0] | !(|data);
+    assign tx = send_buf[0];
+    assign o_ready = !send_bitcnt;
 
-   always @(posedge i_clk) begin
-      if (cnt[WIDTH] & !(|data))
-        o_ready <= 1'b1;
-      else if (i_valid & o_ready)
-        o_ready <= 1'b0;
+    always @(posedge clk) begin
+        send_divcnt <= send_divcnt + 1;
 
-      if (o_ready | cnt[WIDTH])
-        cnt <= {1'b0,START_VALUE[WIDTH-1:0]};
-      else
-        cnt <= cnt-1;
-
-      if (cnt[WIDTH])
-        data <= {1'b0, data[9:1]};
-      else if (i_valid & o_ready)
-        data <= {1'b1, i_data, 1'b0};
-   end
+        if (rst) begin
+            send_buf <= ~0;
+            send_bitcnt <= 0;
+            send_divcnt <= 0;
+        end else
+            if (i_valid && o_ready) begin
+                send_buf <= {1'b1, i_data, 1'b0};
+                send_bitcnt <= 10;
+                send_divcnt <= 0;
+            end else
+            if(send_divcnt == CLK_DIV && send_bitcnt) begin
+                send_buf <= {1'b1, send_buf[9:1]};
+                send_bitcnt <= send_bitcnt - 1;
+                send_divcnt <= 0;
+            end
+    end
 endmodule
