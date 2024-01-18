@@ -33,7 +33,7 @@ module uart #(parameter integer CLK_DIV = 2) (
                 send_bitcnt <= 10;
                 send_divcnt <= 0;
             end else
-            if(send_divcnt == CLK_DIV && send_bitcnt) begin
+            if(send_divcnt == CLK_DIV - 1 && send_bitcnt) begin
                 send_buf <= {1'b1, send_buf[9:1]};
                 send_bitcnt <= send_bitcnt - 1;
                 send_divcnt <= 0;
