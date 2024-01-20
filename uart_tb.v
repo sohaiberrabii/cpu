@@ -1,52 +1,115 @@
-module test;
-    reg reset = 1;
-    initial #5 reset <= 0;
+`timescale 1ns/10ps
+
+module uart_tb;
+    parameter clk_period = 100; // 10 MHz at 1ns timescale
+    parameter clks_per_bit = $ceil(10_000_000 / 115200);
+    parameter bit_duration = $floor(10_000_000 / 115200) * clk_period;
 
     reg clk = 0;
-    always #5 clk = ~clk;
+    always #(clk_period / 2) clk <= !clk;
 
-    // reg rx = 1;
-    // always #10 rx = ~rx;
+    reg reset = 1;
 
     wire tx;
+    reg i_valid = 0;
+    reg [7:0] i_data = 0;
+    wire tx_done;
 
-    reg i_valid = 1;
-    initial #15 i_valid <= 0;
-    reg [7:0] i_data = 8'h41;
-
-    wire o_ready;
+    reg rx = 1;
     wire [7:0] o_data;
 
-    uart #(.CLK_DIV(2)) uart (
-            .clk(clk),
-            .rst(reset),
+    uart #(.CLK_DIV(clks_per_bit)) uart (
+        .clk(clk),
+        .rst(reset),
 
-            .rx(rx),
-            .tx(tx),
+        .tx(tx),
+        .i_valid(i_valid),
+        .i_data(i_data),
+        .tx_done(tx_done),
 
-            .i_valid(i_valid),
-            .i_data(i_data),
-            .o_ready(o_ready),
-            .o_data(o_data)
+        .rx(rx),
+        .o_data(o_data)
     );
 
-    initial begin
-        $dumpvars;
-        $monitor("tx=%b, send_buf=%b", tx, uart.send_buf);
-        #200 $finish;
-    end
+    task UART_WRITE_BYTE(input [7:0] byte);
+        integer i;
+        begin
+            // start bit
+            rx <= 1'b0;
+            #(bit_duration);
 
-    reg half_clk = 0;
-    initial #5 forever half_clk = #10 ~half_clk; // shift for phase alignement
-    reg signed [10:0] expected = {1'b1, 8'h41, 1'b0, 1'b1}; // initially tx is high
+            // data byte
+            for (i = 0; i < 8; i = i + 1) begin
+                rx <= byte[i];
+                #(bit_duration);
+            end
 
-    initial $display("expected=%b", expected);
-    always @(posedge half_clk) begin
-        expected <= expected >>> 1;
-        if (tx != expected[0]) begin
-            $display("tx=%b, expected=%b", tx, expected[0]);
-            $stop;
+            // stop bit
+            rx <= 1'b1;
+            #(bit_duration);
         end
+    endtask
+
+    task UART_READ_BYTE(output [7:0] byte);
+        integer i;
+        begin
+            // start bit
+            #(bit_duration);
+            if (tx != 0) begin
+                $display("no start bit at tx");
+                $stop;
+            end
+
+            // data byte
+            for (i = 0; i < 8; i = i + 1) begin
+                #(bit_duration);
+                byte[i] <= tx;
+            end
+
+            // stop bit
+            #(bit_duration);
+            if (tx != 1) begin
+                $display("no stop bit at tx");
+                $stop;
+            end
+        end
+    endtask
+
+    reg [7:0] tx_byte;
+
+    initial begin
+        $dumpfile("uart_tb.vcd");
+        $dumpvars;
+
+        @(posedge clk);
+        reset <= 0;
+        @(posedge clk);
+
+        // tx test
+        i_valid <= 1;
+        i_data <= 8'hAB;
+        @(posedge clk);
+
+        i_valid <= 0;
+        UART_READ_BYTE(tx_byte);
+
+        if (tx_byte == 8'hAB)
+            $display("tx test passed - correct byte sent");
+        else
+            $display("tx test failed - incorrect byte snt");
+
+        // @(posedge tx_done);
+
+        // rx test
+        @(posedge clk);
+        UART_WRITE_BYTE(8'h3F);
+
+        if (o_data == 8'h3F)
+            $display("rx test passed - correct byte received");
+        else
+            $display("rx test failed - incorrect byte received");
+
+        $finish;
     end
 
 endmodule
