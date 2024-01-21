@@ -87,6 +87,24 @@ start:
 	TEST(or)
 	TEST(and)
 
+    // Get cycle and instruction count
+    li x2, 0x2000c
+cycle_count:
+    rdcycleh x3
+    rdcycle x4
+    rdcycleh x5
+    bne x3, x5, cycle_count
+    sw x4, 0(x2)
+    sw x5, 4(x2)
+
+instr_count:
+    rdinstreth x3
+    rdinstret x4
+    rdinstreth x5
+    bne x3, x5, instr_count
+    sw x4, 8(x2)
+    sw x5, 12(x2)
+
     li x2, 0x20008
     li x1, 0
     sw x1, 0(x2)

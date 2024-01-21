@@ -39,9 +39,20 @@ module test;
 
     // check test status
     reg [7:0] failed = 0;
+    reg [63:0] cycle_count, instr_count;
     always @(posedge clk) begin
         if(|mem_write && mem_addr == 32'h20004)
             $write("%c", mem_wdata[7:0]);
+
+        if (|mem_write && mem_addr == 32'h2000c)
+            cycle_count[31:0] <= mem_wdata;
+        if (|mem_write && mem_addr == 32'h20010)
+            cycle_count[63:32] <= mem_wdata;
+
+        if (|mem_write && mem_addr == 32'h20014)
+            instr_count[31:0] <= mem_wdata;
+        if (|mem_write && mem_addr == 32'h20018)
+            instr_count[63:32] <= mem_wdata;
 
         // ebreak
         if(instr == 32'h00100073) failed <= failed + 1;
@@ -51,9 +62,11 @@ module test;
                     $display("Failed %d tests", failed);
                 else
                     $display("Tests passed");
-                $finish;
             end else
                 $write(": %3d", mem_wdata);
+
+            $display("Executed %12d instructions in %12d cycles", instr_count, cycle_count);
+            $finish;
         end
     end
 endmodule

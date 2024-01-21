@@ -12,6 +12,20 @@ module cpu(
     // register file
     reg [31:0] rf[31:0];
 
+    // cycle and retired instr counters
+    reg [63:0] cycle_counter, instr_counter;
+    always @(posedge clk) begin
+        if (reset) begin
+           cycle_counter <= 0;
+           instr_counter <= 0;
+        end else begin
+            cycle_counter <= cycle_counter + 1;
+            // an instruction is guaranteed to complete if not flushed at execute stage
+            if (!flushe)
+                instr_counter <= instr_counter + 1;
+        end
+    end
+
     assign mem_addr  = alu_result;
     assign mem_write = memwrite_e;
     assign pc        = pc_f;
@@ -103,6 +117,14 @@ module cpu(
     wire is_u_type = instr_lui || instr_auipc;
     wire is_j_type = instr_jal;
 
+    // csr
+    wire csr = instr_d[6:0] == 7'b1110011;
+    wire instr_rdcycle  = csr && instr_d[31:12] == {12'hc00, 5'b0, 3'b010};
+    wire instr_rdcycleh = csr && instr_d[31:12] == {12'hc80, 5'b0, 3'b010};
+    wire instr_rdinstret  = csr && instr_d[31:12] == {12'hc02, 5'b0, 3'b010};
+    wire instr_rdinstreth = csr && instr_d[31:12] == {12'hc82, 5'b0, 3'b010};
+    wire is_rdcycle_rdinstret = |{instr_rdcycle, instr_rdcycleh, instr_rdinstret, instr_rdinstreth};
+
     // control lines for load/store
     reg [3:0] memwrite_e;
     reg sb_e, sh_e, sw_e;
@@ -116,13 +138,22 @@ module cpu(
     reg lb_e, lb_m, lb_w;
     reg lbu_e, lbu_m, lbu_w;
 
+    reg rdcycleh_e, rdcycle_e;
+    reg rdinstret_e, rdinstreth_e;
+
     always @(posedge clk) begin
         if (reset || flushe) begin
             regwrite_e <= 0;
             is_load_e <= 0;
             {sb_e, sh_e, sw_e} <= 0;
         end else begin
-            regwrite_e <= |{is_lui_auipc_jal_jalr, is_lb_lh_lw_lbu_lhu, is_alu_reg_imm, is_alu_reg_reg};
+            regwrite_e <= |{
+                is_lui_auipc_jal_jalr,
+                is_lb_lh_lw_lbu_lhu,
+                is_alu_reg_imm,
+                is_alu_reg_reg,
+                is_rdcycle_rdinstret
+            };
 
             is_load_e <= is_lb_lh_lw_lbu_lhu;
             lw_e <= instr_lw;
@@ -134,6 +165,11 @@ module cpu(
             sb_e <= instr_sb;
             sh_e <= instr_sh;
             sw_e <= instr_sw;
+
+            rdcycle_e <= instr_rdcycle;
+            rdcycleh_e <= instr_rdcycleh;
+            rdinstret_e <= instr_rdinstret;
+            rdinstreth_e <= instr_rdinstreth;
         end
 
         regwrite_m <= regwrite_e;
@@ -323,9 +359,13 @@ module cpu(
     reg [31:0] alu_result;
     (* parallel_case *)
     always @* case (1'b1)
-        alu_jump: alu_result = alu_pcplus4;
+        alu_jump:        alu_result = alu_pcplus4;
         alu_set_compare: alu_result = alu_zero;
-        default: alu_result = alu_out;
+        rdcycle_e:       alu_result = cycle_counter[31:0];
+        rdcycleh_e:      alu_result = cycle_counter[63:32];
+        rdinstret_e:     alu_result = instr_counter[31:0];
+        rdinstreth_e:    alu_result = instr_counter[63:32];
+        default:         alu_result = alu_out;
     endcase
 
     // execute to memory / writeback
