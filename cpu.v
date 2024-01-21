@@ -117,38 +117,42 @@ module cpu(
     reg lbu_e, lbu_m, lbu_w;
 
     always @(posedge clk) begin
-        if (reset || flushe)
-            {regwrite_e, sb_e, sh_e, sw_e} <= 0;
-        else
+        if (reset || flushe) begin
+            regwrite_e <= 0;
+            is_load_e <= 0;
+            {sb_e, sh_e, sw_e} <= 0;
+        end else begin
             regwrite_e <= |{is_lui_auipc_jal_jalr, is_lb_lh_lw_lbu_lhu, is_alu_reg_imm, is_alu_reg_reg};
-            regwrite_m <= regwrite_e;
-            regwrite_w <= regwrite_m;
+
+            is_load_e <= is_lb_lh_lw_lbu_lhu;
+            lw_e <= instr_lw;
+            lh_e <= instr_lh;
+            lhu_e <= instr_lhu;
+            lb_e <= instr_lb;
+            lbu_e <= instr_lbu;
 
             sb_e <= instr_sb;
             sh_e <= instr_sh;
             sw_e <= instr_sw;
+        end
 
-            is_load_e <= is_lb_lh_lw_lbu_lhu;
+        regwrite_m <= regwrite_e;
+        regwrite_w <= regwrite_m;
 
-            lw_e <= instr_lw;
-            lw_m <= lw_e;
-            lw_w <= lw_m;
+        lw_m <= lw_e;
+        lw_w <= lw_m;
 
-            lh_e <= instr_lh;
-            lh_m <= lh_e;
-            lh_w <= lh_m;
+        lh_m <= lh_e;
+        lh_w <= lh_m;
 
-            lhu_e <= instr_lhu;
-            lhu_m <= lhu_e;
-            lhu_w <= lhu_m;
+        lhu_m <= lhu_e;
+        lhu_w <= lhu_m;
 
-            lb_e <= instr_lb;
-            lb_m <= lb_e;
-            lb_w <= lb_m;
+        lb_m <= lb_e;
+        lb_w <= lb_m;
 
-            lbu_e <= instr_lbu;
-            lbu_m <= lbu_e;
-            lbu_w <= lbu_m;
+        lbu_m <= lbu_e;
+        lbu_w <= lbu_m;
     end
 
     (* parallel_case *)
