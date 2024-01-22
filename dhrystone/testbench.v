@@ -48,10 +48,12 @@ module testbench;
 	always @(posedge clk) begin
         // ebreak
         if(instr == 32'h00100073) begin
-            $display("pc: %h, instr: %h ", pc, instr);
-			repeat (10) @(posedge clk);
-			$display("EBREAK");
-			$finish;
+            @(posedge clk);
+            if (!dut.flushe) begin
+                repeat (10) @(posedge clk);
+                $display("EBREAK");
+                $finish;
+            end
 		end
 	end
 endmodule
