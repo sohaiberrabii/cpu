@@ -5,13 +5,12 @@ module test;
     reg reset = 1;
     initial #5 reset <= 0;
 
-    // memory
     reg [31:0] mem[0:32767];
-    initial $readmemh("firmware.hex", mem);
     wire [3:0] mem_write;
     wire [31:0] mem_wdata, mem_addr;
     reg [31:0] mem_rdata;
 
+    // TODO: should validate the mem_addr fit in 17 bits, i.e. < 4 * 32768
     always @(posedge clk) begin
         mem_rdata <= mem[mem_addr[16:2]];
         if (mem_write[0]) mem[mem_addr[16:2]][7:0] <= mem_wdata[7:0];
@@ -29,6 +28,8 @@ module test;
         .mem_write(mem_write), .mem_addr(mem_addr),
         .mem_rdata(mem_rdata), .mem_wdata(mem_wdata)
     );
+
+    initial $readmemh("firmware.hex", mem);
 
     // initialize test
     reg [8*32:1] vcdfn;

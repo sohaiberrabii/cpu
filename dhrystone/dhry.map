@@ -1,0 +1,118 @@
+Archive member included to satisfy reference by file (symbol)
+
+/opt/riscv32i/lib/gcc/riscv32-unknown-elf/13.2.0/libgcc.a(div.o)
+                              dhry_1.o (__divsi3)
+
+Discarded input sections
+
+ .debug_line    0x00000000      0x153 /opt/riscv32i/lib/gcc/riscv32-unknown-elf/13.2.0/libgcc.a(div.o)
+ .debug_line_str
+                0x00000000       0x7c /opt/riscv32i/lib/gcc/riscv32-unknown-elf/13.2.0/libgcc.a(div.o)
+ .debug_info    0x00000000       0x5f /opt/riscv32i/lib/gcc/riscv32-unknown-elf/13.2.0/libgcc.a(div.o)
+ .debug_abbrev  0x00000000       0x28 /opt/riscv32i/lib/gcc/riscv32-unknown-elf/13.2.0/libgcc.a(div.o)
+ .debug_aranges
+                0x00000000       0x20 /opt/riscv32i/lib/gcc/riscv32-unknown-elf/13.2.0/libgcc.a(div.o)
+ .debug_str     0x00000000       0xc1 /opt/riscv32i/lib/gcc/riscv32-unknown-elf/13.2.0/libgcc.a(div.o)
+
+Memory Configuration
+
+Name             Origin             Length             Attributes
+*default*        0x00000000         0xffffffff
+
+Linker script and memory map
+
+
+.memory         0x00000000    0x142f4
+                0x00010000                        . = 0x10000
+ *fill*         0x00000000    0x10000 
+ start*(.text)
+ .text          0x00010000       0x88 start.o
+                0x00010000                start
+ *(.text)
+ .text          0x00010088      0x21c dhry_1.o
+                0x00010088                Proc_1
+                0x00010200                Proc_2
+                0x00010230                Proc_3
+                0x0001025c                Proc_4
+                0x0001028c                Proc_5
+ .text          0x000102a4      0x154 dhry_2.o
+                0x000102a4                Proc_6
+                0x000102f8                Proc_7
+                0x00010308                Proc_8
+                0x0001037c                Func_1
+                0x000103a0                Func_2
+                0x000103ec                Func_3
+ .text          0x000103f8      0x430 stdlib.o
+                0x000103f8                time
+                0x00010400                insn
+                0x00010408                malloc
+                0x00010434                printf
+                0x000105dc                memcpy
+                0x00010680                strcpy
+                0x00010730                strcmp
+ .text          0x00010828       0xb4 /opt/riscv32i/lib/gcc/riscv32-unknown-elf/13.2.0/libgcc.a(div.o)
+                0x00010828                __divsi3
+                0x00010830                __hidden___udivsi3
+                0x00010830                __udivsi3
+                0x00010878                __umodsi3
+                0x000108ac                __modsi3
+ *(*)
+ .data          0x000108dc        0x0 dhry_1.o
+ .bss           0x000108dc     0x27d8 dhry_1.o
+                0x000108dc                Arr_1_Glob
+                0x000109a4                Arr_2_Glob
+ .rodata.str1.4
+                0x000130b4      0x5d6 dhry_1.o
+                                0x5d2 (size before relaxing)
+ *fill*         0x0001368a        0x2 
+ .text.startup  0x0001368c      0x794 dhry_1.o
+                0x0001368c                main
+ .sbss          0x00013e20       0x38 dhry_1.o
+                0x00013e20                Dhrystones_Per_Second
+                0x00013e24                Microseconds
+                0x00013e28                User_Insn
+                0x00013e2c                End_Insn
+                0x00013e30                Begin_Insn
+                0x00013e34                User_Time
+                0x00013e38                End_Time
+                0x00013e3c                Begin_Time
+                0x00013e40                Reg
+                0x00013e44                Ch_2_Glob
+                0x00013e45                Ch_1_Glob
+                0x00013e48                Bool_Glob
+                0x00013e4c                Int_Glob
+                0x00013e50                Next_Ptr_Glob
+                0x00013e54                Ptr_Glob
+ .comment       0x00013e58        0xf dhry_1.o
+                                 0x10 (size before relaxing)
+ .riscv.attributes
+                0x00013e67       0x1c dhry_1.o
+ .data          0x00013e83        0x0 dhry_2.o
+ .bss           0x00013e83        0x0 dhry_2.o
+ .comment       0x00013e83       0x10 dhry_2.o
+ .riscv.attributes
+                0x00013e83       0x1c dhry_2.o
+ .data          0x00013e9f        0x0 stdlib.o
+ *fill*         0x00013e9f        0x1 
+ .bss           0x00013ea0      0x400 stdlib.o
+                0x00013ea0                heap_memory
+ .sbss          0x000142a0        0x4 stdlib.o
+                0x000142a0                heap_memory_used
+ .comment       0x000142a4       0x10 stdlib.o
+ .riscv.attributes
+                0x000142a4       0x1c stdlib.o
+ .data          0x000142c0        0x0 start.o
+ .bss           0x000142c0        0x0 start.o
+ .riscv.attributes
+                0x000142c0       0x1a start.o
+ .data          0x000142da        0x0 /opt/riscv32i/lib/gcc/riscv32-unknown-elf/13.2.0/libgcc.a(div.o)
+ .bss           0x000142da        0x0 /opt/riscv32i/lib/gcc/riscv32-unknown-elf/13.2.0/libgcc.a(div.o)
+ .riscv.attributes
+                0x000142da       0x1a /opt/riscv32i/lib/gcc/riscv32-unknown-elf/13.2.0/libgcc.a(div.o)
+                0x000142f4                        end = .
+LOAD dhry_1.o
+LOAD dhry_2.o
+LOAD stdlib.o
+LOAD start.o
+LOAD /opt/riscv32i/lib/gcc/riscv32-unknown-elf/13.2.0/libgcc.a
+OUTPUT(dhry.elf elf32-littleriscv)

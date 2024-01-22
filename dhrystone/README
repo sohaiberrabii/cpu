@@ -1,0 +1,3 @@
+The Dhrystone benchmark and a verilog testbench to run it.
+
+Taken from https://github.com/YosysHQ/picorv32
