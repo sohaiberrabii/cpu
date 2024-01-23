@@ -21,7 +21,6 @@ module uart #(parameter integer CLK_DIV = 105) (
     assign o_data = recv_buf_valid ? recv_buf : ~0;
 
     always @(posedge clk) begin
-        recv_counter <= recv_counter + 1;
         if (rst) begin
             receiving <= 0;
             recv_start <= 0;
@@ -29,6 +28,8 @@ module uart #(parameter integer CLK_DIV = 105) (
             recv_buf_valid <= 0;
             recv_buf <= 0;
         end else begin
+            recv_counter <= recv_counter + 1;
+
             // start bit
             if (!rx && !receiving) begin
                 receiving <= 1;
@@ -67,13 +68,13 @@ module uart #(parameter integer CLK_DIV = 105) (
     assign tx_done = !send_bitcnt;
 
     always @(posedge clk) begin
-        send_divcnt <= send_divcnt + 1;
-
         if (rst) begin
             send_buf <= ~0;
             send_bitcnt <= 0;
             send_divcnt <= 0;
         end else
+            send_divcnt <= send_divcnt + 1;
+
             if (i_valid && tx_done) begin
                 send_buf <= {1'b1, i_data, 1'b0};
                 send_bitcnt <= 10;
