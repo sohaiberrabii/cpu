@@ -18,7 +18,8 @@ module cpu #(
     reg [63:0] cycle_counter, instr_counter;
 
     // valid execute stage instr, assumes no illegal instructions for now
-    reg valid_inst_e;
+    wire valid_instr = !flushe && !flushd_e;
+    reg flushd_e;
     always @(posedge clk) begin
         if (reset) begin
            cycle_counter <= 0;
@@ -26,9 +27,10 @@ module cpu #(
         end else begin
             cycle_counter <= cycle_counter + 1;
             // an instruction is guaranteed to complete if not flushed at execute stage
-            if (!flushe)
+            if (valid_instr)
                 instr_counter <= instr_counter + 1;
         end
+        flushd_e <= flushd;
     end
 
     assign mem_addr  = alu_result;
