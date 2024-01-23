@@ -1,6 +1,8 @@
 `default_nettype none
 
-module cpu(
+module cpu #(
+    parameter [31:0] PROGADDR_RESET = 32'h 0000_0000
+) (
     input clk, reset,
     output [31:0] mem_addr,
     output reg [31:0] mem_wdata,
@@ -14,6 +16,9 @@ module cpu(
 
     // cycle and retired instr counters
     reg [63:0] cycle_counter, instr_counter;
+
+    // valid execute stage instr, assumes no illegal instructions for now
+    reg valid_inst_e;
     always @(posedge clk) begin
         if (reset) begin
            cycle_counter <= 0;
@@ -39,7 +44,7 @@ module cpu(
     reg [31:0] pc_f;
     always @(posedge clk) begin
         if (reset)
-            pc_f <= 0;
+            pc_f <= PROGADDR_RESET;
         else if (~load_stall)
             if (take_branch)
                 pc_f <= {pctarget_e[31:1], 1'b0};
@@ -380,6 +385,7 @@ module cpu(
     // stall
     wire load_stall = (rd_e == instr_d[19:15] | rd_e == instr_d[24:20]) & is_load_e;
 
+    // TODO: instret_counter is prolly wrong, add test
     // flush
     wire flushd = take_branch;
     wire flushe = take_branch | load_stall;

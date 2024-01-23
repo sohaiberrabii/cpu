@@ -33,7 +33,7 @@ module testbench;
     wire [31:0] pc;
     wire [31:0] instr = mem[pc[31:2]];
 
-    cpu dut (
+    cpu #(.PROGADDR_RESET(32'h10000)) dut (
         .clk(clk), .reset(reset),
         .pc(pc), .instr(instr),
         .mem_write(mem_write), .mem_addr(mem_addr),
